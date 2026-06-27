@@ -4,7 +4,7 @@ id = "mixamo_retarget"
 version = "2.0.0"
 name = "Mixamo Retarget"
 tagline = "Retarget Mixamo FBX animations to any Mixamo-rigged character"
-maintainer = "Kimodo Bridge Contributors"
+maintainer = "YeLanQ"
 type = "add-on"
 
 blender_version_min = "4.2.0"
