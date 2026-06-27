@@ -107,6 +107,10 @@ class MIXAMO_PT_Bake(MIXAMO_PT_Base, Panel):
     bl_idname = "MIXAMO_PT_Bake"
     bl_order = 30
 
+    @classmethod
+    def poll(cls, context):
+        return context.mode == 'POSE'
+
     def draw(self, context):
         layout = self.layout
         s = context.scene.mixamo_retarget
@@ -128,9 +132,6 @@ class MIXAMO_PT_Bake(MIXAMO_PT_Base, Panel):
         box.prop(s, "interp_use_mirror")
 
         col = box.column(align=True)
-        op_all = col.operator("mixamo_retarget.interpolate_bones",
-                              text="Full Interpolation (补帧)", icon='IPO_BEZIER')
-        op_all.mode = "all"
 
         row = col.row(align=True)
         op_pred = row.operator("mixamo_retarget.interpolate_bones",
@@ -141,9 +142,6 @@ class MIXAMO_PT_Bake(MIXAMO_PT_Base, Panel):
         op_smooth2.mode = "smooth"
 
         row = col.row(align=True)
-        op_miss = row.operator("mixamo_retarget.interpolate_bones",
-                               text="Fill Missing", icon='KEYFRAME')
-        op_miss.mode = "missing"
         op_gaps = row.operator("mixamo_retarget.interpolate_bones",
                                text="Fill Gaps", icon='KEYFRAME_HLT')
         op_gaps.mode = "gaps"

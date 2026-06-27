@@ -8,6 +8,25 @@ from mathutils import Matrix, Vector
 
 CONSTRAINT_PREFIX = "MIXAMO_RETARGET_"
 
+
+def _ensure_fcurve(action, armature_obj, data_path, index=0, group_name=''):
+    """Get or create an FCurve using the API available in this Blender version."""
+    if hasattr(action, 'fcurve_ensure_for_datablock'):
+        fcu = action.fcurve_ensure_for_datablock(
+            armature_obj, data_path, index=index, group_name=group_name)
+        return fcu
+    # Legacy path for Blender < 5.0
+    if hasattr(action, 'fcurves'):
+        fcu = action.fcurves.find(data_path, index)
+        if fcu:
+            return fcu
+        fcu = action.fcurves.new(data_path, index=index)
+        if group_name:
+            fcu.group = action.groups.new(group_name)
+        return fcu
+    return None
+
+
 # ============================================================================
 # Bone Name Canonicalization (from VRM addon)
 # ============================================================================
@@ -736,29 +755,48 @@ def bake_retargeted_animation(
     frame_end: int,
 ) -> bool:
     try:
-        bpy.ops.object.select_all(action='DESELECT')
-        target_arm.select_set(True)
-        bpy.context.view_layer.objects.active = target_arm
-
         bpy.ops.object.mode_set(mode='POSE')
         bpy.ops.pose.select_all(action='SELECT')
 
-        bpy.ops.nla.bake(
-            frame_start=frame_start,
-            frame_end=frame_end,
-            only_selected=False,
-            visual_keying=True,
-            clear_constraints=True,
-            clear_parents=False,
-            use_current_action=True,
-            bake_types={'POSE'},
-        )
+        # Ensure action exists
+        if target_arm.animation_data is None:
+            target_arm.animation_data_create()
+        action = target_arm.animation_data.action
+        if action is None:
+            action = bpy.data.actions.new(name=f"{target_arm.name}_Action")
+            target_arm.animation_data.action = action
+
+        bones = target_arm.pose.bones
+
+        for frame in range(frame_start, frame_end + 1):
+            bpy.context.scene.frame_set(frame)
+            for bone in bones:
+                prefix = f'pose.bones["{bone.name}"].'
+                for idx in range(3):
+                    fcu = _ensure_fcurve(action, target_arm, prefix + 'location', index=idx, group_name=bone.name)
+                    fcu.keyframe_points.insert(frame, bone.location[idx])
+                    fcu.update()
+                for idx in range(4):
+                    fcu = _ensure_fcurve(action, target_arm, prefix + 'rotation_quaternion', index=idx, group_name=bone.name)
+                    fcu.keyframe_points.insert(frame, bone.rotation_quaternion[idx])
+                    fcu.update()
+                for idx in range(3):
+                    fcu = _ensure_fcurve(action, target_arm, prefix + 'scale', index=idx, group_name=bone.name)
+                    fcu.keyframe_points.insert(frame, bone.scale[idx])
+                    fcu.update()
+
+        # Remove constraints
+        for bone in bones:
+            for c in list(bone.constraints):
+                bone.constraints.remove(c)
 
         bpy.ops.object.mode_set(mode='OBJECT')
         return True
 
     except Exception as e:
         print(f"[Mixamo Retarget] Bake error: {e}")
+        import traceback
+        traceback.print_exc()
         return False
 
 
@@ -767,7 +805,7 @@ def bake_retargeted_animation(
 # ============================================================================
 
 
-def get_bone_fcurves(action, bone_name):
+def get_bone_fcurves(armature_obj, action, bone_name):
     """Get all F-curves for a specific bone.
     Returns (location_fcurves[3], rotation_fcurves[4], scale_fcurves[3]).
     Each entry is the FCurve or None.
@@ -775,27 +813,37 @@ def get_bone_fcurves(action, bone_name):
     loc = [None, None, None]
     rot = [None, None, None, None]
     scale = [None, None, None]
-
-    if not hasattr(action, 'fcurves'):
-        return loc, rot, scale
-
     prefix = f'pose.bones["{bone_name}"].'
-    for fcu in action.fcurves:
-        if fcu.data_path == prefix + 'location':
-            loc[fcu.array_index] = fcu
-        elif fcu.data_path == prefix + 'rotation_quaternion':
-            rot[fcu.array_index] = fcu
-        elif fcu.data_path == prefix + 'scale':
-            scale[fcu.array_index] = fcu
 
+    for idx in range(3):
+        try:
+            fcu = _ensure_fcurve(action, armature_obj, prefix + 'location', index=idx)
+            if fcu and fcu.keyframe_points:
+                loc[idx] = fcu
+        except (AttributeError, TypeError):
+            pass
+    for idx in range(4):
+        try:
+            fcu = _ensure_fcurve(action, armature_obj, prefix + 'rotation_quaternion', index=idx)
+            if fcu and fcu.keyframe_points:
+                rot[idx] = fcu
+        except (AttributeError, TypeError):
+            pass
+    for idx in range(3):
+        try:
+            fcu = _ensure_fcurve(action, armature_obj, prefix + 'scale', index=idx)
+            if fcu and fcu.keyframe_points:
+                scale[idx] = fcu
+        except (AttributeError, TypeError):
+            pass
     return loc, rot, scale
 
 
-def bone_has_fcurves(action, bone_name):
-    """Check if a bone has any F-curves in the given action."""
+def bone_has_fcurves(armature_obj, action, bone_name):
+    """Check if a bone has any F-curves with keyframes in the given action."""
     if not action:
         return False
-    loc, rot, scale = get_bone_fcurves(action, bone_name)
+    loc, rot, scale = get_bone_fcurves(armature_obj, action, bone_name)
     return any(fc is not None for fc in loc + rot + scale)
 
 
@@ -830,25 +878,44 @@ def _ensure_action(armature_obj):
     return armature_obj.animation_data.action
 
 
-def _get_bone_keyframe_frames(action, bone_name):
+def _get_bone_keyframe_frames(action, bone_name, armature_obj=None):
     """Get all frames that have keyframes for this bone across all channels."""
     frames = set()
-    if not hasattr(action, 'fcurves'):
+    if not action:
         return []
-    for fcu in action.fcurves:
-        if f'pose.bones["{bone_name}"]' in fcu.data_path:
-            for kp in fcu.keyframe_points:
-                frames.add(int(kp.co.x))
+    props = ['location', 'rotation_quaternion', 'scale']
+    dims = [3, 4, 3]
+    prefix = f'pose.bones["{bone_name}"].'
+    for prop, dim in zip(props, dims):
+        for idx in range(dim):
+            try:
+                if armature_obj:
+                    fcu = _ensure_fcurve(action, armature_obj, prefix + prop, index=idx)
+                else:
+                    fcu = None
+                # fallback: check legacy fcurves
+                if fcu is None and hasattr(action, 'fcurves'):
+                    for fc in action.fcurves:
+                        if fc.data_path == prefix + prop and fc.array_index == idx:
+                            fcu = fc
+                            break
+            except (AttributeError, TypeError):
+                fcu = None
+            if fcu:
+                for kp in fcu.keyframe_points:
+                    frames.add(int(kp.co.x))
     return sorted(frames)
 
 
 def _get_rest_local(armature_obj, bone_name):
-    """Get the rest-pose local transform for a bone relative to its parent."""
+    """Get the rest-pose local transform for a bone relative to its parent (parent-TAIL to child-HEAD)."""
     bone_edit = armature_obj.data.bones[bone_name]
     if bone_edit.parent:
         parent_rest = bone_edit.parent.matrix_local
         bone_rest = bone_edit.matrix_local
-        return parent_rest.inverted() @ bone_rest
+        mat = parent_rest.inverted() @ bone_rest
+        mat.translation -= Vector((0, bone_edit.parent.length, 0))
+        return mat
     else:
         return bone_edit.matrix_local
 
@@ -870,7 +937,7 @@ def fill_missing_bone_animation(armature_obj, bone_name, frame_start, frame_end,
     action = _ensure_action(armature_obj)
     bone = armature_obj.pose.bones[bone_name]
 
-    if bone_has_fcurves(action, bone_name):
+    if bone_has_fcurves(armature_obj, action, bone_name):
         return 0
 
     rest_local = _get_rest_local(armature_obj, bone_name)
@@ -898,7 +965,7 @@ def derive_from_mirror_bone(armature_obj, bone_name, frame_start, frame_end, ste
 
     action = _ensure_action(armature_obj)
 
-    if not bone_has_fcurves(action, mirror):
+    if not bone_has_fcurves(armature_obj, action, mirror):
         return 0, f"Mirror bone '{mirror}' has no F-curves"
 
     keyframes_added = 0
@@ -935,10 +1002,10 @@ def fill_keyframe_gaps(armature_obj, bone_name, frame_start, frame_end, step=1):
     action = _ensure_action(armature_obj)
     bone = armature_obj.pose.bones[bone_name]
 
-    if not bone_has_fcurves(action, bone_name):
+    if not bone_has_fcurves(armature_obj, action, bone_name):
         return 0
 
-    existing_frames = _get_bone_keyframe_frames(action, bone_name)
+    existing_frames = _get_bone_keyframe_frames(action, bone_name, armature_obj)
     keyframes_added = 0
 
     for frame in range(frame_start, frame_end + 1, step):
@@ -968,11 +1035,10 @@ def smooth_bone_fcurves(armature_obj, bone_name, passes=3):
 
     for prop_name, dim in data_paths:
         for idx in range(dim):
-            fcurve = None
-            for fc in action.fcurves:
-                if fc.data_path == prefix + prop_name and fc.array_index == idx:
-                    fcurve = fc
-                    break
+            try:
+                fcurve = _ensure_fcurve(action, armature_obj, prefix + prop_name, index=idx)
+            except (AttributeError, TypeError):
+                fcurve = None
             if fcurve is None or len(fcurve.keyframe_points) < 3:
                 continue
 
@@ -998,17 +1064,21 @@ def smooth_bone_fcurves(armature_obj, bone_name, passes=3):
 
 
 def _clear_bone_fcurves(armature_obj, bone_name):
-    """Remove all F-curves for a given bone from the armature's action."""
+    """Remove all keyframes for a given bone from the armature's action."""
     action = armature_obj.animation_data.action if armature_obj.animation_data else None
     if not action:
         return
-    to_remove = []
+    props = ['location', 'rotation_quaternion', 'scale']
+    dims = [3, 4, 3]
     prefix = f'pose.bones["{bone_name}"].'
-    for fcu in action.fcurves:
-        if fcu.data_path.startswith(prefix):
-            to_remove.append(fcu)
-    for fcu in to_remove:
-        action.fcurves.remove(fcu)
+    for prop, dim in zip(props, dims):
+        for idx in range(dim):
+            try:
+                fcu = _ensure_fcurve(action, armature_obj, prefix + prop, index=idx)
+                if fcu and fcu.keyframe_points:
+                    fcu.keyframe_points.clear()
+            except (AttributeError, TypeError):
+                pass
 
 
 def _find_related_bones(armature_obj, bone_name, use_mirror=True):
@@ -1069,7 +1139,7 @@ def _predict_bone_from_source(armature_obj, bone_name, source_name, rel_type, fr
     source_edit = armature_obj.data.bones[source_name]
 
     if rel_type == 'mirror':
-        if not bone_has_fcurves(action, source_name):
+        if not bone_has_fcurves(armature_obj, action, source_name):
             return 0, f"Mirror source '{source_name}' has no F-curves"
         _clear_bone_fcurves(armature_obj, bone_name)
         keyframes_added = 0
@@ -1089,15 +1159,14 @@ def _predict_bone_from_source(armature_obj, bone_name, source_name, rel_type, fr
         return keyframes_added, None
 
     elif rel_type == 'parent':
-        if not bone_has_fcurves(action, source_name):
+        if not bone_has_fcurves(armature_obj, action, source_name):
             return 0, f"Parent source '{source_name}' has no F-curves"
         _clear_bone_fcurves(armature_obj, bone_name)
         rest_local = _get_rest_local(armature_obj, bone_name)
         keyframes_added = 0
         for frame in range(frame_start, frame_end + 1, step):
             bpy.context.scene.frame_set(frame)
-            desired = source.matrix @ rest_local
-            loc, rot, scl = desired.decompose()
+            loc, rot, scl = rest_local.decompose()
             bone.location = loc
             bone.rotation_quaternion = rot
             bone.scale = scl
@@ -1106,16 +1175,21 @@ def _predict_bone_from_source(armature_obj, bone_name, source_name, rel_type, fr
         return keyframes_added, None
 
     elif rel_type == 'chain_ancestor':
-        if not bone_has_fcurves(action, source_name):
+        if not bone_has_fcurves(armature_obj, action, source_name):
             return 0, f"Ancestor source '{source_name}' has no F-curves"
         _clear_bone_fcurves(armature_obj, bone_name)
         source_rest = source_edit.matrix_local
         bone_rest = armature_obj.data.bones[bone_name].matrix_local
         offset = source_rest.inverted() @ bone_rest
+        parent_edit = armature_obj.data.bones[bone_name].parent
         keyframes_added = 0
         for frame in range(frame_start, frame_end + 1, step):
             bpy.context.scene.frame_set(frame)
             desired = source.matrix @ offset
+            if bone.parent:
+                desired = bone.parent.matrix.inverted() @ desired
+            if parent_edit:
+                desired.translation -= Vector((0, parent_edit.length, 0))
             loc, rot, scl = desired.decompose()
             bone.location = loc
             bone.rotation_quaternion = rot
@@ -1125,20 +1199,23 @@ def _predict_bone_from_source(armature_obj, bone_name, source_name, rel_type, fr
         return keyframes_added, None
 
     elif rel_type in ('sibling', 'child'):
-        if not bone_has_fcurves(action, source_name):
+        if not bone_has_fcurves(armature_obj, action, source_name):
             return 0, f"Source '{source_name}' has no F-curves"
         _clear_bone_fcurves(armature_obj, bone_name)
+        parent_edit = armature_obj.data.bones[bone_name].parent
 
         if rel_type == 'child':
             # Derive parent from child:
-            # parent_arm = child.matrix @ child.matrix_basis^-1
-            # For root: bone.matrix_basis = parent_arm
-            # For non-root: bone_world = parent_arm, then compute basis
+            # parent_world = child.matrix @ child.matrix_basis^-1
             keyframes_added = 0
             for frame in range(frame_start, frame_end + 1, step):
                 bpy.context.scene.frame_set(frame)
                 source_basis_inv = source.matrix_basis.inverted()
                 desired = source.matrix @ source_basis_inv
+                if bone.parent:
+                    desired = bone.parent.matrix.inverted() @ desired
+                if parent_edit:
+                    desired.translation -= Vector((0, parent_edit.length, 0))
                 loc, rot, scl = desired.decompose()
                 bone.location = loc
                 bone.rotation_quaternion = rot
@@ -1155,6 +1232,10 @@ def _predict_bone_from_source(armature_obj, bone_name, source_name, rel_type, fr
                 shared_parent_mat = source.matrix @ source_basis_inv
                 rest_local = _get_rest_local(armature_obj, bone_name)
                 desired = shared_parent_mat @ rest_local
+                if bone.parent:
+                    desired = bone.parent.matrix.inverted() @ desired
+                if parent_edit:
+                    desired.translation -= Vector((0, parent_edit.length, 0))
                 loc, rot, scl = desired.decompose()
                 bone.location = loc
                 bone.rotation_quaternion = rot
@@ -1203,10 +1284,10 @@ def temporal_predict_frames(armature_obj, bone_name, frame_start, frame_end, ste
         return 0
 
     bone = armature_obj.pose.bones[bone_name]
-    if not bone_has_fcurves(action, bone_name):
+    if not bone_has_fcurves(armature_obj, action, bone_name):
         return 0
 
-    existing = _get_bone_keyframe_frames(action, bone_name)
+    existing = _get_bone_keyframe_frames(action, bone_name, armature_obj)
     if len(existing) < 2:
         return 0
 
@@ -1273,27 +1354,41 @@ def interpolate_armature_animation(
         bone_stats = {'keyframes_added': 0, 'actions': []}
 
         action = armature_obj.animation_data.action if armature_obj.animation_data else None
-        has_fcurves = bone_has_fcurves(action, bone_name) if action else False
+        has_fcurves = bone_has_fcurves(armature_obj, action, bone_name) if action else False
 
-        if fill_missing and not has_fcurves:
-            mirrored = False
-            if use_mirror:
+        if not has_fcurves:
+            filled = False
+            if use_mirror and (fill_missing or predict):
                 n, err = derive_from_mirror_bone(
                     armature_obj, bone_name, frame_start, frame_end, step
                 )
                 if err is None and n > 0:
                     bone_stats['keyframes_added'] += n
                     bone_stats['actions'].append("derived from mirror")
-                    mirrored = True
+                    filled = True
+                    has_fcurves = True
 
-            if not mirrored:
+            if not filled and predict:
+                n, src_name, rel_type, err = predict_bone_from_related(
+                    armature_obj, bone_name, frame_start, frame_end, step,
+                    use_mirror=use_mirror,
+                )
+                if err is None and n > 0:
+                    bone_stats['keyframes_added'] += n
+                    bone_stats['actions'].append(f"predicted from {rel_type}")
+                    has_fcurves = True
+                    filled = True
+
+            if not filled and fill_missing:
                 n = fill_missing_bone_animation(
                     armature_obj, bone_name, frame_start, frame_end, step
                 )
                 bone_stats['keyframes_added'] += n
                 bone_stats['actions'].append("missing filled")
+                has_fcurves = True
 
-        if predict:
+        # Standalone predict mode: replace animation even for bones with F-curves
+        if predict and has_fcurves and not fill_missing and not fill_gaps and not smooth:
             n, src_name, rel_type, err = predict_bone_from_related(
                 armature_obj, bone_name, frame_start, frame_end, step,
                 use_mirror=use_mirror,
@@ -1301,7 +1396,6 @@ def interpolate_armature_animation(
             if err is None and n > 0:
                 bone_stats['keyframes_added'] += n
                 bone_stats['actions'].append(f"predicted from {rel_type}")
-                has_fcurves = True
 
         if fill_gaps and has_fcurves:
             n = fill_keyframe_gaps(

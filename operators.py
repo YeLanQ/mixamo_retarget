@@ -408,13 +408,11 @@ class MIXAMO_OT_InterpolateBones(Operator):
         name="Mode",
         description="Interpolation mode",
         items=[
-            ("all", "All (补帧)", "Fill missing + fill gaps + smooth"),
             ("predict", "Predict (预测)", "Predict motion from related joints (parent/chain/temporal)"),
-            ("missing", "Fill Missing", "Create keyframes for bones without any animation"),
             ("gaps", "Fill Gaps", "Fill in missing frames on existing F-curves"),
             ("smooth", "Smooth Only", "Smooth jerky F-curves (moving average)"),
         ],
-        default="all",
+        default="predict",
     )
 
     def execute(self, context):

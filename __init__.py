@@ -1,8 +1,8 @@
 bl_info = {
     "name": "Mixamo Retarget",
     "author": "Kimodo Bridge Contributors",
-    "version": (1, 0, 0),
-    "blender": (4, 2, 0),
+    "version": (2, 0, 0),
+    "blender": (5, 1, 0),
     "location": "View3D > Sidebar (N-Panel) > Mixamo Retarget",
     "description": "Retarget Mixamo FBX animations between Mixamo-rigged characters",
     "category": "Animation",
