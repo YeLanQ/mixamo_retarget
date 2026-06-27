@@ -925,9 +925,10 @@ def _keyframe_bone(armature_obj, bone_name, frame):
 
 
 def fill_missing_bone_animation(armature_obj, bone_name, frame_start, frame_end, step=1):
-    """Create rest-pose local keyframes for a bone with no F-curves.
-    Captures the bone's rest local transform (offset from parent) on each frame,
-    so it follows the parent chain naturally with explicit keyframes.
+    """Create identity-matrix keyframes for a bone with no F-curves.
+    The bone follows its parent chain at the rest-pose offset (handled by
+    Blender's internal armature evaluation via bone.matrix_local).
+    All keyframes are identity because the bone has no local animation.
     Returns number of keyframes added.
     """
     action = _ensure_action(armature_obj)
@@ -936,15 +937,12 @@ def fill_missing_bone_animation(armature_obj, bone_name, frame_start, frame_end,
     if bone_has_fcurves(armature_obj, action, bone_name):
         return 0
 
-    rest_local = _get_rest_local(armature_obj, bone_name)
-    loc, rot, scl = rest_local.decompose()
-
     keyframes_added = 0
     for frame in range(frame_start, frame_end + 1, step):
         bpy.context.scene.frame_set(frame)
-        bone.location = loc
-        bone.rotation_quaternion = rot
-        bone.scale = scl
+        bone.location = (0.0, 0.0, 0.0)
+        bone.rotation_quaternion = (1.0, 0.0, 0.0, 0.0)
+        bone.scale = (1.0, 1.0, 1.0)
         _keyframe_bone(armature_obj, bone_name, frame)
         keyframes_added += 1
 
@@ -1152,14 +1150,16 @@ def _predict_bone_from_source(armature_obj, bone_name, source_name, rel_type, fr
         if not bone_has_fcurves(armature_obj, action, source_name):
             return 0, f"Parent source '{source_name}' has no F-curves"
         _clear_bone_fcurves(armature_obj, bone_name)
-        rest_local = _get_rest_local(armature_obj, bone_name)
+        # Child follows parent at rest — identity matrix_basis.
+        # Blender's armature evaluation (bone.matrix = parent.matrix @
+        # bone.matrix_local @ bone.matrix_basis) handles the rest-pose
+        # offset internally; we don't write it into the animation.
         keyframes_added = 0
         for frame in range(frame_start, frame_end + 1, step):
             bpy.context.scene.frame_set(frame)
-            loc, rot, scl = rest_local.decompose()
-            bone.location = loc
-            bone.rotation_quaternion = rot
-            bone.scale = scl
+            bone.location = (0.0, 0.0, 0.0)
+            bone.rotation_quaternion = (1.0, 0.0, 0.0, 0.0)
+            bone.scale = (1.0, 1.0, 1.0)
             _keyframe_bone(armature_obj, bone_name, frame)
             keyframes_added += 1
         return keyframes_added, None
@@ -1168,20 +1168,15 @@ def _predict_bone_from_source(armature_obj, bone_name, source_name, rel_type, fr
         if not bone_has_fcurves(armature_obj, action, source_name):
             return 0, f"Ancestor source '{source_name}' has no F-curves"
         _clear_bone_fcurves(armature_obj, bone_name)
-        # ancestor_to_descendant_rest = (ancestor midpoint) → descendant head in ancestor's rest space
-        source_rest = source_edit.matrix_local
-        bone_rest = armature_obj.data.bones[bone_name].matrix_local
-        offset = source_rest.inverted() @ bone_rest
+        # The chain between ancestor and descendant has intermediate bones
+        # whose animation is unknown — the safest prediction is identity
+        # (descendant follows its direct parent at rest).
         keyframes_added = 0
         for frame in range(frame_start, frame_end + 1, step):
             bpy.context.scene.frame_set(frame)
-            desired = source.matrix @ offset
-            if bone.parent:
-                desired = bone.parent.matrix.inverted() @ desired
-            loc, rot, scl = desired.decompose()
-            bone.location = loc
-            bone.rotation_quaternion = rot
-            bone.scale = scl
+            bone.location = (0.0, 0.0, 0.0)
+            bone.rotation_quaternion = (1.0, 0.0, 0.0, 0.0)
+            bone.scale = (1.0, 1.0, 1.0)
             _keyframe_bone(armature_obj, bone_name, frame)
             keyframes_added += 1
         return keyframes_added, None
@@ -1212,22 +1207,17 @@ def _predict_bone_from_source(armature_obj, bone_name, source_name, rel_type, fr
                 keyframes_added += 1
             return keyframes_added, None
 
-        else:  # sibling — use source's parent matrix then apply bone's rest offset
-            # shared_parent_pose = sibling.matrix @ sibling.matrix_basis^-1 @ sibling_rest_local^-1
-            source_rest_local = _get_rest_local(armature_obj, source_name)
-            source_rest_inv = source_rest_local.inverted()
-            target_rest_local = _get_rest_local(armature_obj, bone_name)
+        else:  # sibling — follow shared parent at rest
+            # Target bone has no direct animation; it follows its parent at the
+            # rest-pose offset (Blender handles this via bone.matrix_local).
+            # sibling case only runs when direct parent has no FCurves,
+            # so there's nothing meaningful to derive.
             keyframes_added = 0
             for frame in range(frame_start, frame_end + 1, step):
                 bpy.context.scene.frame_set(frame)
-                shared_parent_mat = source.matrix @ source.matrix_basis.inverted() @ source_rest_inv
-                desired = shared_parent_mat @ target_rest_local
-                if bone.parent:
-                    desired = bone.parent.matrix.inverted() @ desired
-                loc, rot, scl = desired.decompose()
-                bone.location = loc
-                bone.rotation_quaternion = rot
-                bone.scale = scl
+                bone.location = (0.0, 0.0, 0.0)
+                bone.rotation_quaternion = (1.0, 0.0, 0.0, 0.0)
+                bone.scale = (1.0, 1.0, 1.0)
                 _keyframe_bone(armature_obj, bone_name, frame)
                 keyframes_added += 1
             return keyframes_added, None

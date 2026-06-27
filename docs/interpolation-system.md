@@ -174,22 +174,84 @@ shared_parent = sibling.matrix @ sibling.matrix_basis⁻¹ @ sibling_rest_local�
 desired = shared_parent @ target_rest_local
 ```
 
-**chain_ancestor 推导**：移除错误的 `parent_edit.length` 尾部调整（原用于抵消 parent length，但在链式推导中不适用）。
+**chain_ancestor 推导**：移除错误的 `parent_edit.length` 尾部调整；改为 identity matrix_basis（中间骨骼动画未知，无法安全推导）。
+
+### Bug 5: 预测帧值全部相同（平线 FCurve）
+
+#### 问题
+
+`fill_missing_bone_animation` 和 `parent`/`sibling`/`chain_ancestor` 推导都写入 `_get_rest_local().decompose()`——这是一个**常量**（骨骼的 rest-pose 偏移不随时间变化），导致所有关键帧的值完全相同，FCurve 在 Graph Editor 中显示为平线。
+
+#### 根因分析
+
+**Blender 的骨骼求值公式**：
+
+```
+bone.matrix = parent.matrix @ bone.matrix_local @ bone.matrix_basis
+```
+
+其中：
+- `parent.matrix` = 父级的当前 Pose 矩阵（每帧变化）
+- `bone.matrix_local` = 骨骼的 Armature-Space Rest 矩阵（固定，由 Edit Mode 定义）
+- `bone.matrix_basis` = 本地动画（由 `bone.location`/`rotation_quaternion`/`scale` 构成）
+
+`bone.matrix_local` **已经包含了父级 Tail 到当前骨骼 Head 的 Rest-Pose 偏移**。如果 `matrix_basis` 再写入同样的偏移（即 `_get_rest_local().decompose()`），会导致**双重偏移**——骨骼位置/旋转错误。
+
+对直链骨骼（如 Spine1→Spine2，Y 轴对齐），双重偏移抵消后 ≈ identity，影响较小。
+对非直链骨骼（如 Shoulder→Arm，有 45° 旋转角），双重旋转导致骨骼方向完全错误。
+
+#### 修复
+
+所有预测推导（parent/sibling/chain_ancestor）和 fallback `fill_missing_bone_animation` 都改为写入 **identity matrix_basis**：
+
+```python
+# 对每帧：
+bone.location = (0.0, 0.0, 0.0)
+bone.rotation_quaternion = (1.0, 0.0, 0.0, 0.0)
+bone.scale = (1.0, 1.0, 1.0)
+```
+
+**数学结果**：
+
+```
+bone.matrix_basis = I
+bone.matrix = parent.matrix @ bone.matrix_local @ I
+            = parent.matrix @ bone.matrix_local
+```
+
+子骨骼在世界空间跟随父级运动（因为 `parent.matrix` 每帧变化），但没有自己的额外动画。
+
+#### 用户感知
+
+| 视图 | 现象 | 正确性 |
+|------|------|--------|
+| Graph Editor | FCurve 平线（所有帧值相同） | ✅ 正确 |
+| Viewport 3D | 骨骼跟随父级运动 | ✅ 正确 |
+| 无动画骨骼（手指/脚趾/末端） | 静止在 Rest Pose | ✅ 预期行为 |
+
+**FCurve 平线不是 bug**——平线表示骨骼在 Local 空间没有独立动画，所有运动来自父级链。Predict 无法凭空生成末端骨骼的握拳/弯曲动画；如果需要，应通过 Retargeting 约束 + Bake 让源动画驱动。
 
 ## 向后兼容性
 
 - 所有对外接口签名未变（`interpolate_armature_animation` 参数列表不变）
 - 新增 `_find_fcurve` 内部函数，不影响外部调用
 - 模式标志的含义已改变：之前 `predict=True` 只预测不保底，现在 `predict=True` 隐含保底 + gaps + smooth。但 GUI 按钮始终按新模式工作，不影响用户体验。
+- `fill_missing_bone_animation` 从写入 `_get_rest_local` 改为写入 identity——对于之前依赖 `fill_missing` 的直线链骨骼，效果相同；对非直链骨骼，之前是错误的（双重旋转），现在是正确的。
 
 ## 常见问题
 
+### Q: 为什么 Predict 后关键帧在 Graph Editor 中是平线？
+
+这是**正确行为**。平线表示骨骼在本地空间无独立动画，所有运动来自父级链。见 Bug 5 分析。
+
 ### Q: 为什么 Hips 动画预测后位置偏移？
 
-**原因**：Child 推导未抵消子骨骼的 Rest-Pose Offset。`spine.matrix @ spine.matrix_basis⁻¹` 得到的是 `hips_pose @ spine_rest_local`，其中 `spine_rest_local` 包含从 Hips Tail 到 Spine Head 的偏移（约 10 单位 + 旋转）。该偏移错误地被当作 Hips 的 Pose 写入。
-
-**修复**：在公式右侧乘以 `spine_rest_local⁻¹` 抵消该偏移。
+**原因**：Child 推导未抵消子骨骼的 Rest-Pose Offset。`spine.matrix @ spine.matrix_basis⁻¹` 得到的是 `hips_pose @ spine_rest_local`，其中 `spine_rest_local` 包含从 Hips Tail 到 Spine Head 的偏移（约 10 单位 + 旋转）。该偏移错误地被当作 Hips 的 Pose 写入。已在 Bug 4 中修复。
 
 ### Q: 多个子骨骼（Spine + LeftUpLeg + RightUpLeg）如何选择？
 
 按 `_find_related_bones` 的优先级顺序，遍历到第一个有 FCurve 的子骨骼即停止。通常在 Mixamo 骨骼中 Spine 最先被命中。如果需要更精确的推导（如多子骨骼加权平均），属于未来增强方向。
+
+### Q: 为什么手指/脚趾预测后不动？
+
+Predict 只能让骨骼跟随父级运动（维持 Rest Pose 相对位置），无法凭空生成握拳/弯曲等独立动画。如果需要手指动画，请确保 Baking 阶段有对应的手指动画数据被转换到目标骨骼。
