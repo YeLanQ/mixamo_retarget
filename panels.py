@@ -133,15 +133,20 @@ class MIXAMO_PT_Bake(MIXAMO_PT_Base, Panel):
         op_all.mode = "all"
 
         row = col.row(align=True)
+        op_pred = row.operator("mixamo_retarget.interpolate_bones",
+                               text="Predict (预测)", icon='FORECAST')
+        op_pred.mode = "predict"
+        op_smooth2 = row.operator("mixamo_retarget.interpolate_bones",
+                                  text="Smooth", icon='SMOOTHCURVE')
+        op_smooth2.mode = "smooth"
+
+        row = col.row(align=True)
         op_miss = row.operator("mixamo_retarget.interpolate_bones",
                                text="Fill Missing", icon='KEYFRAME')
         op_miss.mode = "missing"
         op_gaps = row.operator("mixamo_retarget.interpolate_bones",
                                text="Fill Gaps", icon='KEYFRAME_HLT')
         op_gaps.mode = "gaps"
-        op_smooth = row.operator("mixamo_retarget.interpolate_bones",
-                                 text="Smooth", icon='SMOOTHCURVE')
-        op_smooth.mode = "smooth"
 
 
 class MIXAMO_PT_Presets(MIXAMO_PT_Base, Panel):

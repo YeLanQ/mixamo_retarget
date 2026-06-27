@@ -409,6 +409,7 @@ class MIXAMO_OT_InterpolateBones(Operator):
         description="Interpolation mode",
         items=[
             ("all", "All (补帧)", "Fill missing + fill gaps + smooth"),
+            ("predict", "Predict (预测)", "Predict motion from related joints (parent/chain/temporal)"),
             ("missing", "Fill Missing", "Create keyframes for bones without any animation"),
             ("gaps", "Fill Gaps", "Fill in missing frames on existing F-curves"),
             ("smooth", "Smooth Only", "Smooth jerky F-curves (moving average)"),
@@ -429,6 +430,7 @@ class MIXAMO_OT_InterpolateBones(Operator):
         fill_missing = self.mode in ("missing", "all")
         fill_gaps = self.mode in ("gaps", "all")
         smooth = self.mode in ("smooth", "all")
+        predict = self.mode in ("predict", "all")
 
         wm = context.window_manager
         bones = list(arm.pose.bones)
@@ -447,6 +449,7 @@ class MIXAMO_OT_InterpolateBones(Operator):
             smoothing_passes=s.smoothing_passes,
             step=s.interp_step,
             use_mirror=s.interp_use_mirror,
+            predict=predict,
             progress_callback=_on_progress,
         )
 
@@ -465,12 +468,16 @@ class MIXAMO_OT_InterpolateBones(Operator):
             1 for v in stats.values()
             if any("mirror" in a for a in v['actions'])
         )
+        bones_predicted = sum(
+            1 for v in stats.values()
+            if any("predicted" in a or "temporal" in a for a in v['actions'])
+        )
         bones_smoothed = sum(
             1 for v in stats.values()
             if any("smoothed" in a for a in v['actions'])
         )
 
-        details = f"({total_added} keyframes, {bones_missing} missing, {bones_mirrored} mirrored, {bones_smoothed} smoothed)"
+        details = f"({total_added} kf, miss {bones_missing}, mir {bones_mirrored}, pred {bones_predicted}, smooth {bones_smoothed})"
         self.report({'INFO'}, f"Interpolated {bones_affected} bones {details}")
         return {'FINISHED'}
 

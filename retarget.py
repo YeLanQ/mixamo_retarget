@@ -842,9 +842,29 @@ def _get_bone_keyframe_frames(action, bone_name):
     return sorted(frames)
 
 
+def _get_rest_local(armature_obj, bone_name):
+    """Get the rest-pose local transform for a bone relative to its parent."""
+    bone_edit = armature_obj.data.bones[bone_name]
+    if bone_edit.parent:
+        parent_rest = bone_edit.parent.matrix_local
+        bone_rest = bone_edit.matrix_local
+        return parent_rest.inverted() @ bone_rest
+    else:
+        return bone_edit.matrix_local
+
+
+def _keyframe_bone(armature_obj, bone_name, frame):
+    """Insert location/rotation/scale keyframes for a bone at given frame."""
+    bone = armature_obj.pose.bones[bone_name]
+    bone.keyframe_insert(data_path='location', frame=frame, group=bone_name)
+    bone.keyframe_insert(data_path='rotation_quaternion', frame=frame, group=bone_name)
+    bone.keyframe_insert(data_path='scale', frame=frame, group=bone_name)
+
+
 def fill_missing_bone_animation(armature_obj, bone_name, frame_start, frame_end, step=1):
-    """Create minimal animation (identity local transform) for a bone with no F-curves.
-    This ensures the bone follows its parent naturally with keyframes at regular intervals.
+    """Create rest-pose local keyframes for a bone with no F-curves.
+    Captures the bone's rest local transform (offset from parent) on each frame,
+    so it follows the parent chain naturally with explicit keyframes.
     Returns number of keyframes added.
     """
     action = _ensure_action(armature_obj)
@@ -853,15 +873,16 @@ def fill_missing_bone_animation(armature_obj, bone_name, frame_start, frame_end,
     if bone_has_fcurves(action, bone_name):
         return 0
 
+    rest_local = _get_rest_local(armature_obj, bone_name)
+    loc, rot, scl = rest_local.decompose()
+
     keyframes_added = 0
     for frame in range(frame_start, frame_end + 1, step):
         bpy.context.scene.frame_set(frame)
-        bone.location = (0.0, 0.0, 0.0)
-        bone.rotation_quaternion = (1.0, 0.0, 0.0, 0.0)
-        bone.scale = (1.0, 1.0, 1.0)
-        bone.keyframe_insert(data_path='location', frame=frame, group=bone_name)
-        bone.keyframe_insert(data_path='rotation_quaternion', frame=frame, group=bone_name)
-        bone.keyframe_insert(data_path='scale', frame=frame, group=bone_name)
+        bone.location = loc
+        bone.rotation_quaternion = rot
+        bone.scale = scl
+        _keyframe_bone(armature_obj, bone_name, frame)
         keyframes_added += 1
 
     return keyframes_added
@@ -976,6 +997,81 @@ def smooth_bone_fcurves(armature_obj, bone_name, passes=3):
             fcurve.update()
 
 
+def derive_bone_from_parent(armature_obj, bone_name, frame_start, frame_end, step=1):
+    """Predict a bone's animation by deriving from its parent's world-space motion.
+    At each frame, samples the parent's animated world transform and applies the
+    bone's rest-pose local offset, yielding natural follow-through animation.
+
+    Returns (keyframes_added, error_message_or_None).
+    """
+    bone = armature_obj.pose.bones.get(bone_name)
+    if not bone:
+        return 0, "Bone not found"
+
+    parent = bone.parent
+    if not parent:
+        return 0, "Bone has no parent"
+
+    action = _ensure_action(armature_obj)
+    if not bone_has_fcurves(action, parent.name):
+        return 0, f"Parent '{parent.name}' has no F-curves to derive from"
+
+    rest_local = _get_rest_local(armature_obj, bone_name)
+
+    keyframes_added = 0
+    for frame in range(frame_start, frame_end + 1, step):
+        bpy.context.scene.frame_set(frame)
+        parent_mat = parent.matrix
+        desired = parent_mat @ rest_local
+        loc, rot, scl = desired.decompose()
+        bone.location = loc
+        bone.rotation_quaternion = rot
+        bone.scale = scl
+        _keyframe_bone(armature_obj, bone_name, frame)
+        keyframes_added += 1
+
+    return keyframes_added, None
+
+
+
+
+
+def temporal_predict_frames(armature_obj, bone_name, frame_start, frame_end, step=1):
+    """Fill missing frames using temporal prediction from existing keyframes.
+    Uses cubic (bezier) interpolation between surrounding keyframes.
+    Only fills frames between existing keyframes (does not extrapolate).
+
+    Returns number of keyframes added.
+    """
+    action = armature_obj.animation_data.action if armature_obj.animation_data else None
+    if not action:
+        return 0
+
+    bone = armature_obj.pose.bones[bone_name]
+    if not bone_has_fcurves(action, bone_name):
+        return 0
+
+    existing = _get_bone_keyframe_frames(action, bone_name)
+    if len(existing) < 2:
+        return 0
+
+    keyframes_added = 0
+    for frame in range(frame_start, frame_end + 1, step):
+        if frame in existing:
+            continue
+        if frame < existing[0] or frame > existing[-1]:
+            continue
+
+        bpy.context.scene.frame_set(frame)
+
+        bone.keyframe_insert(data_path='location', frame=frame, group=bone_name)
+        bone.keyframe_insert(data_path='rotation_quaternion', frame=frame, group=bone_name)
+        bone.keyframe_insert(data_path='scale', frame=frame, group=bone_name)
+        keyframes_added += 1
+
+    return keyframes_added
+
+
 def interpolate_armature_animation(
     armature_obj: bpy.types.Object,
     frame_start: int,
@@ -986,6 +1082,7 @@ def interpolate_armature_animation(
     smoothing_passes: int = 3,
     step: int = 1,
     use_mirror: bool = True,
+    predict: bool = False,
     progress_callback: callable = None,
 ) -> dict:
     """Comprehensive bone animation in-betweening (补帧) for an armature.
@@ -993,6 +1090,7 @@ def interpolate_armature_animation(
     - fill_missing: For bones without F-curves, derive from mirror or create identity keyframes
     - fill_gaps:     Ensure keyframes exist at regular intervals
     - smooth:        Apply moving-average smoothing to jerky F-curves
+    - predict:       Predict motion from related bones (parent follow, chain distribution, temporal)
 
     progress_callback(steps_done, total_steps, current_bone_name) is called
     after each bone is processed.
@@ -1034,12 +1132,28 @@ def interpolate_armature_animation(
                 bone_stats['keyframes_added'] += n
                 bone_stats['actions'].append("missing filled")
 
+        if predict and not has_fcurves:
+            n, err = derive_bone_from_parent(
+                armature_obj, bone_name, frame_start, frame_end, step
+            )
+            if err is None and n > 0:
+                bone_stats['keyframes_added'] += n
+                bone_stats['actions'].append("predicted from parent")
+
         if fill_gaps and has_fcurves:
             n = fill_keyframe_gaps(
                 armature_obj, bone_name, frame_start, frame_end, step
             )
             bone_stats['keyframes_added'] += n
             bone_stats['actions'].append("gaps filled")
+
+        if predict and has_fcurves:
+            n = temporal_predict_frames(
+                armature_obj, bone_name, frame_start, frame_end, step
+            )
+            if n > 0:
+                bone_stats['keyframes_added'] += n
+                bone_stats['actions'].append("temporal predicted")
 
         if smooth and has_fcurves:
             smooth_bone_fcurves(armature_obj, bone_name, smoothing_passes)
