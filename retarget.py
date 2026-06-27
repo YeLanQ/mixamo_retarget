@@ -1128,27 +1128,40 @@ def _predict_bone_from_source(armature_obj, bone_name, source_name, rel_type, fr
         if not bone_has_fcurves(action, source_name):
             return 0, f"Source '{source_name}' has no F-curves"
         _clear_bone_fcurves(armature_obj, bone_name)
-        source_rest = source_edit.matrix_local
-        bone_rest = armature_obj.data.bones[bone_name].matrix_local
-        source_parent_rest = source_edit.parent.matrix_local if source_edit.parent else Matrix.Identity(4)
-        bone_parent_rest = armature_obj.data.bones[bone_name].parent.matrix_local if armature_obj.data.bones[bone_name].parent else Matrix.Identity(4)
-        if rel_type == 'sibling' and source_edit.parent:
-            ref_rest = source_edit.parent.matrix_local
-            offset = ref_rest.inverted() @ bone_rest
-        else:
-            offset = bone_parent_rest.inverted() @ bone_rest
-        keyframes_added = 0
-        for frame in range(frame_start, frame_end + 1, step):
-            bpy.context.scene.frame_set(frame)
-            source_parent_world = source.parent.matrix if source.parent else Matrix.Identity(4)
-            desired = source_parent_world @ offset
-            loc, rot, scl = desired.decompose()
-            bone.location = loc
-            bone.rotation_quaternion = rot
-            bone.scale = scl
-            _keyframe_bone(armature_obj, bone_name, frame)
-            keyframes_added += 1
-        return keyframes_added, None
+
+        if rel_type == 'child':
+            # Derive parent from child:
+            # parent_arm = child.matrix @ child.matrix_basis^-1
+            # For root: bone.matrix_basis = parent_arm
+            # For non-root: bone_world = parent_arm, then compute basis
+            keyframes_added = 0
+            for frame in range(frame_start, frame_end + 1, step):
+                bpy.context.scene.frame_set(frame)
+                source_basis_inv = source.matrix_basis.inverted()
+                desired = source.matrix @ source_basis_inv
+                loc, rot, scl = desired.decompose()
+                bone.location = loc
+                bone.rotation_quaternion = rot
+                bone.scale = scl
+                _keyframe_bone(armature_obj, bone_name, frame)
+                keyframes_added += 1
+            return keyframes_added, None
+
+        else:  # sibling — use source's parent matrix then apply bone's rest offset
+            keyframes_added = 0
+            for frame in range(frame_start, frame_end + 1, step):
+                bpy.context.scene.frame_set(frame)
+                source_basis_inv = source.matrix_basis.inverted()
+                shared_parent_mat = source.matrix @ source_basis_inv
+                rest_local = _get_rest_local(armature_obj, bone_name)
+                desired = shared_parent_mat @ rest_local
+                loc, rot, scl = desired.decompose()
+                bone.location = loc
+                bone.rotation_quaternion = rot
+                bone.scale = scl
+                _keyframe_bone(armature_obj, bone_name, frame)
+                keyframes_added += 1
+            return keyframes_added, None
 
     return 0, f"Unknown relationship type '{rel_type}'"
 
