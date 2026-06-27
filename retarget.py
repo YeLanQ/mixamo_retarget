@@ -652,17 +652,15 @@ def _add_copy_rotation(pbone, source_arm, src_name: str, is_root: bool = False) 
         loc.name = CONSTRAINT_PREFIX + "Location"
         loc.target = source_arm
         loc.subtarget = src_name
-        loc.use_offset = True
+        loc.use_offset = False
 
     rot = pbone.constraints.new("COPY_ROTATION")
     rot.name = CONSTRAINT_PREFIX + "Rotation"
     rot.target = source_arm
     rot.subtarget = src_name
-    rot.mix_mode = 'ADD' if is_root else 'REPLACE'
-    # Root: WORLD ADD — source rotation delta added to target's rest rotation.
-    # Non-root: LOCAL REPLACE — target's local rotation matches source's local rotation.
-    rot.owner_space = 'WORLD' if is_root else 'LOCAL'
-    rot.target_space = 'WORLD' if is_root else 'LOCAL'
+    rot.mix_mode = 'REPLACE'
+    rot.owner_space = 'WORLD'
+    rot.target_space = 'WORLD'
 
 
 def _add_copy_transforms(pbone, source_arm, src_name: str) -> None:
