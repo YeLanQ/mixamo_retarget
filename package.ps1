@@ -1,32 +1,14 @@
-param(
-    [switch]$BumpPatch,
-    [switch]$BumpMinor,
-    [switch]$BumpMajor,
-    [string]$SetVersion = ""
-)
+param()
 
 $ErrorActionPreference = "Stop"
-
 $SourceDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 
-# ---- Version bump ----
-$BumpScript = Join-Path $SourceDir "bump_version.ps1"
-if ($SetVersion -ne "") {
-    & $BumpScript -NewVersion $SetVersion
-} elseif ($BumpMajor) {
-    & $BumpScript -Major
-} elseif ($BumpMinor) {
-    & $BumpScript -Minor
-} elseif ($BumpPatch) {
-    & $BumpScript -Patch
-}
-
-# ---- Read current version ----
+# Read version from manifest
 $Version = "0.0.0"
 $ManifestFile = Join-Path $SourceDir "blender_manifest.toml"
 if (Test-Path $ManifestFile) {
     $Content = Get-Content $ManifestFile -Raw
-    if ($Content -match 'version\s*=\s*"([^"]+)"') {
+    if ($Content -match '(?m)^version\s*=\s*"([^"]+)"') {
         $Version = $Matches[1]
     }
 }
@@ -40,7 +22,6 @@ Write-Host " Mixamo Retarget Package Builder"
 Write-Host "========================================"
 Write-Host ""
 Write-Host "Version: $Version"
-Write-Host "Timestamp: $Timestamp"
 Write-Host "Output: $ZipFilename"
 Write-Host ""
 
