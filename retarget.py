@@ -1168,18 +1168,16 @@ def _predict_bone_from_source(armature_obj, bone_name, source_name, rel_type, fr
         if not bone_has_fcurves(armature_obj, action, source_name):
             return 0, f"Ancestor source '{source_name}' has no F-curves"
         _clear_bone_fcurves(armature_obj, bone_name)
+        # ancestor_to_descendant_rest = (ancestor midpoint) → descendant head in ancestor's rest space
         source_rest = source_edit.matrix_local
         bone_rest = armature_obj.data.bones[bone_name].matrix_local
         offset = source_rest.inverted() @ bone_rest
-        parent_edit = armature_obj.data.bones[bone_name].parent
         keyframes_added = 0
         for frame in range(frame_start, frame_end + 1, step):
             bpy.context.scene.frame_set(frame)
             desired = source.matrix @ offset
             if bone.parent:
                 desired = bone.parent.matrix.inverted() @ desired
-            if parent_edit:
-                desired.translation -= Vector((0, parent_edit.length, 0))
             loc, rot, scl = desired.decompose()
             bone.location = loc
             bone.rotation_quaternion = rot
@@ -1196,16 +1194,16 @@ def _predict_bone_from_source(armature_obj, bone_name, source_name, rel_type, fr
 
         if rel_type == 'child':
             # Derive parent from child:
-            # parent_world = child.matrix @ child.matrix_basis^-1
+            # parent_pose = child.matrix @ child.matrix_basis^-1 @ child_rest_local^-1
+            # child_rest_local = rest offset from parent tail to child head
+            child_rest_local = _get_rest_local(armature_obj, source_name)
+            child_rest_inv = child_rest_local.inverted()
             keyframes_added = 0
             for frame in range(frame_start, frame_end + 1, step):
                 bpy.context.scene.frame_set(frame)
-                source_basis_inv = source.matrix_basis.inverted()
-                desired = source.matrix @ source_basis_inv
+                desired = source.matrix @ source.matrix_basis.inverted() @ child_rest_inv
                 if bone.parent:
                     desired = bone.parent.matrix.inverted() @ desired
-                if parent_edit:
-                    desired.translation -= Vector((0, parent_edit.length, 0))
                 loc, rot, scl = desired.decompose()
                 bone.location = loc
                 bone.rotation_quaternion = rot
@@ -1215,17 +1213,17 @@ def _predict_bone_from_source(armature_obj, bone_name, source_name, rel_type, fr
             return keyframes_added, None
 
         else:  # sibling — use source's parent matrix then apply bone's rest offset
+            # shared_parent_pose = sibling.matrix @ sibling.matrix_basis^-1 @ sibling_rest_local^-1
+            source_rest_local = _get_rest_local(armature_obj, source_name)
+            source_rest_inv = source_rest_local.inverted()
+            target_rest_local = _get_rest_local(armature_obj, bone_name)
             keyframes_added = 0
             for frame in range(frame_start, frame_end + 1, step):
                 bpy.context.scene.frame_set(frame)
-                source_basis_inv = source.matrix_basis.inverted()
-                shared_parent_mat = source.matrix @ source_basis_inv
-                rest_local = _get_rest_local(armature_obj, bone_name)
-                desired = shared_parent_mat @ rest_local
+                shared_parent_mat = source.matrix @ source.matrix_basis.inverted() @ source_rest_inv
+                desired = shared_parent_mat @ target_rest_local
                 if bone.parent:
                     desired = bone.parent.matrix.inverted() @ desired
-                if parent_edit:
-                    desired.translation -= Vector((0, parent_edit.length, 0))
                 loc, rot, scl = desired.decompose()
                 bone.location = loc
                 bone.rotation_quaternion = rot
