@@ -7,6 +7,19 @@ from bpy.props import StringProperty, BoolProperty, IntProperty
 from . import retarget as rt
 
 
+# ---------------------------------------------------------------------------
+# FBX import compatibility across Blender versions
+# ---------------------------------------------------------------------------
+
+def _fbx_import_supported_params() -> set:
+    """Detect which keyword args bpy.ops.import_scene.fbx accepts."""
+    op = bpy.ops.import_scene.fbx
+    rna = op.get_rna_type() if hasattr(op, "get_rna_type") else None
+    if rna is None:
+        return set()
+    return {p.identifier for p in rna.properties}
+
+
 class MIXAMO_OT_ImportMixamoFBX(Operator):
     """Import a Mixamo FBX animation file as the source armature"""
     bl_idname = "mixamo_retarget.import_mixamo_fbx"
@@ -24,23 +37,31 @@ class MIXAMO_OT_ImportMixamoFBX(Operator):
 
         before = set(bpy.context.scene.objects)
 
+        fbx_kwargs = dict(
+            filepath=path,
+            global_scale=s.fbx_scale,
+            use_anim=True,
+            anim_offset=1,
+            use_custom_normals=False,
+            use_image_search=False,
+            use_custom_props=False,
+        )
+        extra_params = dict(
+            use_manual_orientation=False,
+            bake_space_transform=False,
+            use_alpha_decals=False,
+            decal_offset=0.0,
+            use_subsurf=False,
+            use_tspace=False,
+            use_mesh_modifiers=False,
+        )
+        supported = _fbx_import_supported_params()
+        for k, v in extra_params.items():
+            if k in supported:
+                fbx_kwargs[k] = v
+
         try:
-            bpy.ops.import_scene.fbx(
-                filepath=path,
-                use_manual_orientation=False,
-                global_scale=s.fbx_scale,
-                bake_space_transform=False,
-                use_custom_normals=False,
-                use_image_search=False,
-                use_alpha_decals=False,
-                decal_offset=0.0,
-                use_anim=True,
-                anim_offset=1,
-                use_subsurf=False,
-                use_custom_props=False,
-                use_mesh_modifiers=False,
-                use_tspace=False,
-            )
+            bpy.ops.import_scene.fbx(**fbx_kwargs)
         except Exception as e:
             self.report({'ERROR'}, f"FBX import failed: {e}")
             return {'CANCELLED'}

@@ -73,39 +73,47 @@ def is_mixamo_bone(name: str) -> bool:
 
 def auto_build_mapping(source_arm: bpy.types.Object,
                        target_arm: bpy.types.Object) -> list[tuple[str, str]]:
-    src_bones = {b.name for b in source_arm.data.bones}
-    tgt_bones = {b.name: _normalize(b.name) for b in target_arm.data.bones}
-    tgt_names_list = list(target_arm.data.bones.keys())
+    src_name_list = list(source_arm.data.bones.keys())
+    tgt_name_list = list(target_arm.data.bones.keys())
+    src_norm_map = {b.name: _normalize(b.name) for b in source_arm.data.bones}
+    tgt_norm_map = {b.name: _normalize(b.name) for b in target_arm.data.bones}
+
+    def _find_bone(name: str, norm_map: dict, name_list: list) -> str | None:
+        exact = norm_map.get(name)
+        if exact is not None:
+            return name
+        norm = _normalize(name)
+        for bn in name_list:
+            if norm == norm_map[bn]:
+                return bn
+        return None
 
     result = []
-    for src_name, alternatives in MIXAMO_BONE_HINTS:
-        if src_name not in src_bones:
-            continue
-        matched = None
-        for tgt_name in tgt_names_list:
-            if tgt_name == src_name:
-                matched = tgt_name
-                break
-        if not matched:
-            src_norm = _normalize(src_name)
-            for tgt_name, tgt_norm in tgt_bones.items():
-                if src_norm == tgt_norm:
-                    matched = tgt_name
-                    break
-        if not matched:
+    mapped_src_names = set()
+    mapped_tgt_names = set()
+
+    for src_hint, alternatives in MIXAMO_BONE_HINTS:
+        src_matched = _find_bone(src_hint, src_norm_map, src_name_list)
+        if src_matched is None:
             for alt in alternatives:
-                if alt in tgt_bones:
-                    matched = alt
+                src_matched = _find_bone(alt, src_norm_map, src_name_list)
+                if src_matched:
                     break
-                alt_norm = _normalize(alt)
-                for tgt_name, tgt_norm in tgt_bones.items():
-                    if alt_norm == tgt_norm:
-                        matched = tgt_name
-                        break
-                if matched:
+        if src_matched is None or src_matched in mapped_src_names:
+            continue
+
+        tgt_matched = _find_bone(src_hint, tgt_norm_map, tgt_name_list)
+        if tgt_matched is None:
+            for alt in alternatives:
+                tgt_matched = _find_bone(alt, tgt_norm_map, tgt_name_list)
+                if tgt_matched:
                     break
-        if matched:
-            result.append((src_name, matched))
+        if tgt_matched is None or tgt_matched in mapped_tgt_names:
+            continue
+
+        result.append((src_matched, tgt_matched))
+        mapped_src_names.add(src_matched)
+        mapped_tgt_names.add(tgt_matched)
 
     return result
 

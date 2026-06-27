@@ -1,8 +1,28 @@
+param(
+    [switch]$BumpPatch,
+    [switch]$BumpMinor,
+    [switch]$BumpMajor,
+    [string]$SetVersion = ""
+)
+
 $ErrorActionPreference = "Stop"
 
 $SourceDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 
-$Version = "1.0.0"
+# ---- Version bump ----
+$BumpScript = Join-Path $SourceDir "bump_version.ps1"
+if ($SetVersion -ne "") {
+    & $BumpScript -NewVersion $SetVersion
+} elseif ($BumpMajor) {
+    & $BumpScript -Major
+} elseif ($BumpMinor) {
+    & $BumpScript -Minor
+} elseif ($BumpPatch) {
+    & $BumpScript -Patch
+}
+
+# ---- Read current version ----
+$Version = "0.0.0"
 $ManifestFile = Join-Path $SourceDir "blender_manifest.toml"
 if (Test-Path $ManifestFile) {
     $Content = Get-Content $ManifestFile -Raw
