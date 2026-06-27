@@ -646,6 +646,124 @@ class MIXAMO_OT_ImportPresetFile(Operator):
         return {'FINISHED'}
 
 
+class MIXAMO_OT_BoneTransformEdit(Operator):
+    """Add or subtract increment from selected bone transforms on current frame or frame range"""
+    bl_idname = "mixamo_retarget.bone_transform_edit"
+    bl_label = "Bone Transform Edit"
+    bl_description = "Apply increment/decrement to selected bone transforms across frames"
+    bl_options = {"REGISTER", "UNDO"}
+
+    def execute(self, context):
+        s = context.scene.mixamo_retarget
+        cfg = s.bone_edit
+
+        arm = context.active_object
+        if not arm or arm.type != 'ARMATURE':
+            self.report({'ERROR'}, "Select an armature object")
+            return {'CANCELLED'}
+
+        selected = context.selected_pose_bones
+        if not selected:
+            self.report({'ERROR'}, "Select a pose bone first")
+            return {'CANCELLED'}
+
+        bone = selected[0]
+        bone_name = bone.name
+        sign = 1 if cfg.operation == 'ADD' else -1
+
+        channels = []
+        if cfg.use_loc_x: channels.append(('location', 0))
+        if cfg.use_loc_y: channels.append(('location', 1))
+        if cfg.use_loc_z: channels.append(('location', 2))
+        if cfg.use_rot_x: channels.append(('rotation_euler', 0))
+        if cfg.use_rot_y: channels.append(('rotation_euler', 1))
+        if cfg.use_rot_z: channels.append(('rotation_euler', 2))
+        if cfg.use_scale_x: channels.append(('scale', 0))
+        if cfg.use_scale_y: channels.append(('scale', 1))
+        if cfg.use_scale_z: channels.append(('scale', 2))
+
+        if not channels:
+            self.report({'WARNING'}, "No channels selected")
+            return {'CANCELLED'}
+
+        if cfg.apply_mode == 'CURRENT':
+            frames = [context.scene.frame_current]
+        else:
+            start = cfg.frame_start
+            end = cfg.frame_end
+            if start > end:
+                start, end = end, start
+            frames = list(range(start, end + 1))
+
+        original_frame = context.scene.frame_current
+        modified = 0
+
+        for frame in frames:
+            context.scene.frame_set(frame, subframe=0.0)
+            context.view_layer.update()
+            for data_path, index in channels:
+                try:
+                    old_val = getattr(bone, data_path)[index]
+                    new_val = old_val + cfg.increment * sign
+                    getattr(bone, data_path)[index] = new_val
+                    bone.keyframe_insert(data_path=data_path, index=index, frame=frame)
+                    modified += 1
+                except Exception as e:
+                    self.report({'WARNING'}, f"{data_path}[{index}] err: {e}")
+
+        context.scene.frame_set(original_frame)
+        self.report({'INFO'}, f"{'Added' if sign > 0 else 'Subtracted'} {cfg.increment} on {modified} channel(s) across {len(frames)} frame(s) for '{bone_name}'")
+        return {'FINISHED'}
+
+
+class MIXAMO_OT_BoneEditChannelsToggle(Operator):
+    """Toggle all bone edit channels on or off"""
+    bl_idname = "mixamo_retarget.bone_edit_channels_toggle"
+    bl_label = "Toggle Channels"
+
+    state: BoolProperty(default=True)
+
+    def execute(self, context):
+        cfg = context.scene.mixamo_retarget.bone_edit
+        val = self.state
+        cfg.use_loc_x = val
+        cfg.use_loc_y = val
+        cfg.use_loc_z = val
+        cfg.use_rot_x = val
+        cfg.use_rot_y = val
+        cfg.use_rot_z = val
+        cfg.use_scale_x = val
+        cfg.use_scale_y = val
+        cfg.use_scale_z = val
+        return {'FINISHED'}
+
+
+class MIXAMO_OT_BoneEditSnapValues(Operator):
+    """Read current bone transform values into increment as reference"""
+    bl_idname = "mixamo_retarget.bone_edit_snap_values"
+    bl_label = "Snap to Current"
+
+    def execute(self, context):
+        arm = context.active_object
+        if not arm or arm.type != 'ARMATURE':
+            return {'CANCELLED'}
+        selected = context.selected_pose_bones
+        if not selected:
+            return {'CANCELLED'}
+        bone = selected[0]
+        cfg = context.scene.mixamo_retarget.bone_edit
+        if cfg.use_loc_x: cfg.increment = bone.location.x
+        elif cfg.use_loc_y: cfg.increment = bone.location.y
+        elif cfg.use_loc_z: cfg.increment = bone.location.z
+        elif cfg.use_rot_x: cfg.increment = bone.rotation_euler.x
+        elif cfg.use_rot_y: cfg.increment = bone.rotation_euler.y
+        elif cfg.use_rot_z: cfg.increment = bone.rotation_euler.z
+        elif cfg.use_scale_x: cfg.increment = bone.scale.x
+        elif cfg.use_scale_y: cfg.increment = bone.scale.y
+        elif cfg.use_scale_z: cfg.increment = bone.scale.z
+        return {'FINISHED'}
+
+
 _classes = [
     MIXAMO_OT_ImportMixamoFBX,
     MIXAMO_OT_NewMixamoSkeleton,
@@ -665,6 +783,9 @@ _classes = [
     MIXAMO_OT_DeletePreset,
     MIXAMO_OT_ExportPresetFile,
     MIXAMO_OT_ImportPresetFile,
+    MIXAMO_OT_BoneTransformEdit,
+    MIXAMO_OT_BoneEditChannelsToggle,
+    MIXAMO_OT_BoneEditSnapValues,
 ]
 
 

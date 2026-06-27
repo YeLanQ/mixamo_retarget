@@ -8,6 +8,90 @@ class MIXAMO_PT_Base:
     bl_category = 'Mixamo Retarget'
 
 
+class MIXAMO_PT_BoneEditor(MIXAMO_PT_Base, Panel):
+    bl_label = "Bone Editor"
+    bl_idname = "MIXAMO_PT_BoneEditor"
+    bl_order = 5
+
+    @classmethod
+    def poll(cls, context):
+        return context.mode == 'POSE'
+
+    def draw(self, context):
+        layout = self.layout
+        s = context.scene.mixamo_retarget
+        cfg = s.bone_edit
+
+        arm = context.active_object
+        selected = context.selected_pose_bones if arm and arm.type == 'ARMATURE' else []
+
+        if not selected:
+            layout.label(text="Select a bone in Pose Mode", icon='INFO')
+            return
+
+        bone = selected[0]
+
+        # --- Current values display ---
+        box = layout.box()
+        box.label(text=f"  {bone.name}", icon='BONE_DATA')
+
+        loc = bone.location
+        rot = bone.rotation_euler
+        sca = bone.scale
+        row = box.row(align=True)
+        row.label(text=f"Loc  X:{loc.x:7.4f}  Y:{loc.y:7.4f}  Z:{loc.z:7.4f}")
+        row = box.row(align=True)
+        row.label(text=f"Rot  X:{rot.x:7.4f}  Y:{rot.y:7.4f}  Z:{rot.z:7.4f}")
+        row = box.row(align=True)
+        row.label(text=f"Scl  X:{sca.x:7.4f}  Y:{sca.y:7.4f}  Z:{sca.z:7.4f}")
+
+        # --- Channel toggles ---
+        layout.separator()
+        box = layout.box()
+        box.label(text="Channels", icon='ANIM_DATA')
+
+        row = box.row(align=True)
+        row.prop(cfg, "use_loc_x", text="X", toggle=True)
+        row.prop(cfg, "use_loc_y", text="Y", toggle=True)
+        row.prop(cfg, "use_loc_z", text="Z", toggle=True)
+        row.label(text="  Rot:")
+        row.prop(cfg, "use_rot_x", text="X", toggle=True)
+        row.prop(cfg, "use_rot_y", text="Y", toggle=True)
+        row.prop(cfg, "use_rot_z", text="Z", toggle=True)
+        row.label(text="  Scl:")
+        row.prop(cfg, "use_scale_x", text="X", toggle=True)
+        row.prop(cfg, "use_scale_y", text="Y", toggle=True)
+        row.prop(cfg, "use_scale_z", text="Z", toggle=True)
+
+        row = box.row(align=True)
+        row.operator("mixamo_retarget.bone_edit_channels_toggle", text="All").state = True
+        row.operator("mixamo_retarget.bone_edit_channels_toggle", text="None").state = False
+
+        # --- Increment & operation ---
+        layout.separator()
+        box = layout.box()
+        box.label(text="Operation", icon='MODIFIER')
+        row = box.row(align=True)
+        row.prop(cfg, "operation", text="")
+        row.prop(cfg, "increment", text="")
+        row.operator("mixamo_retarget.bone_edit_snap_values", text="", icon='COPYDOWN')
+
+        # --- Frame range ---
+        box = layout.box()
+        box.label(text="Apply To", icon='TIME')
+        row = box.row(align=True)
+        row.prop(cfg, "apply_mode", text="")
+        if cfg.apply_mode == 'RANGE':
+            row.prop(cfg, "frame_start", text="Start")
+            row.prop(cfg, "frame_end", text="End")
+
+        # --- Execute ---
+        layout.separator()
+        row = layout.row(align=True)
+        row.scale_y = 1.5
+        row.operator("mixamo_retarget.bone_transform_edit", text="Execute", icon='PLAY')
+
+
 class MIXAMO_PT_Import(MIXAMO_PT_Base, Panel):
     bl_label = "Import Mixamo FBX"
     bl_idname = "MIXAMO_PT_Import"
@@ -186,6 +270,7 @@ class MIXAMO_PT_Presets(MIXAMO_PT_Base, Panel):
 
 
 _classes = [
+    MIXAMO_PT_BoneEditor,
     MIXAMO_PT_Import,
     MIXAMO_PT_Retarget,
     MIXAMO_PT_Bake,

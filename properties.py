@@ -35,6 +35,43 @@ class MIXAMO_BoneMappingItem(PropertyGroup):
     )
 
 
+class MIXAMO_BoneEditSettings(PropertyGroup):
+    increment: FloatProperty(
+        name="Increment",
+        description="Increment value to add or subtract",
+        default=0.1,
+        precision=4,
+        step=1,
+    )
+    operation: EnumProperty(
+        name="Operation",
+        items=[
+            ("ADD", "Add (+)", "Add increment to current bone property values"),
+            ("SUB", "Subtract (-)", "Subtract increment from current bone property values"),
+        ],
+        default="ADD",
+    )
+    apply_mode: EnumProperty(
+        name="Apply To",
+        items=[
+            ("CURRENT", "Current Frame", "Apply only to the current frame"),
+            ("RANGE", "Frame Range", "Apply to a range of frames"),
+        ],
+        default="CURRENT",
+    )
+    frame_start: IntProperty(name="Start Frame", default=1, min=0)
+    frame_end: IntProperty(name="End Frame", default=250, min=1)
+    use_loc_x: BoolProperty(name="Loc X", default=False)
+    use_loc_y: BoolProperty(name="Loc Y", default=False)
+    use_loc_z: BoolProperty(name="Loc Z", default=False)
+    use_rot_x: BoolProperty(name="Rot X", default=False)
+    use_rot_y: BoolProperty(name="Rot Y", default=False)
+    use_rot_z: BoolProperty(name="Rot Z", default=False)
+    use_scale_x: BoolProperty(name="Scale X", default=False)
+    use_scale_y: BoolProperty(name="Scale Y", default=False)
+    use_scale_z: BoolProperty(name="Scale Z", default=False)
+
+
 class MIXAMO_SceneSettings(PropertyGroup):
     source_armature: PointerProperty(
         name="Source Armature",
@@ -51,6 +88,8 @@ class MIXAMO_SceneSettings(PropertyGroup):
 
     bone_mappings: CollectionProperty(type=MIXAMO_BoneMappingItem)
     bone_mapping_index: IntProperty(default=0)
+
+    bone_edit: PointerProperty(type=MIXAMO_BoneEditSettings)
 
     retarget_root_bone: StringProperty(
         name="Root Bone (Target)",
@@ -119,7 +158,6 @@ class MIXAMO_SceneSettings(PropertyGroup):
         default="Mixamo_Armature",
     )
 
-
 class MIXAMO_AddonPreferences(AddonPreferences):
     bl_idname = __package__
 
@@ -132,6 +170,7 @@ class MIXAMO_AddonPreferences(AddonPreferences):
 
 _classes = [
     MIXAMO_BoneMappingItem,
+    MIXAMO_BoneEditSettings,
     MIXAMO_SceneSettings,
     MIXAMO_AddonPreferences,
 ]
