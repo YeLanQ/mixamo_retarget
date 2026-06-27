@@ -1,0 +1,39 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+env/
+*.egg-info/
+dist/
+build/
+
+# Blender
+*.blend1
+*.blend2
+*.bblend
+*.bak
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# Archives
+*.zip
+
+# Temp
+temp_package/
+
+# Windows device names (accidental redirections)
+nul
+NUL
