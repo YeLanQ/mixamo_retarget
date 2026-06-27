@@ -36,7 +36,9 @@ $FilesToInclude = @(
     "panels.py",
     "properties.py",
     "retarget.py",
-    "ui_list.py"
+    "ui_list.py",
+    "LICENSE",
+    "README.md"
 )
 
 $TempDir = Join-Path $SourceDir "temp_package"
