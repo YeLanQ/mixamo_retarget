@@ -52,3 +52,52 @@ Blender 5.1 的 `nla.bake` 参数和功能未变，但存在一些兼容性问�
 ## Q: 为什么 5.1 的 Action.is_action_legacy=True 且 is_action_layered=True？
 
 这是 Blender 5.1 的版本特性——所有空 Action 同时标记为 legacy 和 layered。Legacy = True 不代表它是旧格式，而是表示"还没有 layer/slot 数据"。一旦添加 layer 或 slot，is_action_legacy 变为 False，is_action_layered 保持 True。
+
+## Q: Bone Editor 的面板在哪？为什么看不到？
+
+Bone Editor 面板位于 `View3D > Sidebar > Mixamo Retarget > Bone Editor`（列表第一项）。
+
+**仅在姿态模式 (Pose Mode) 下显示**。如果处于 Object/Edit/Weight Paint 等其他模式，面板会自动隐藏。
+
+## Q: Bone Editor 支持修改哪些属性？
+
+支持 9 个通道的增量编辑：
+
+| 通道 | 数据路径 | 说明 |
+|------|---------|------|
+| Loc X/Y/Z | `bone.location` | 位置，索引 0/1/2 |
+| Rot X/Y/Z | `bone.rotation_euler` | 欧拉旋转，索引 0/1/2 |
+| Scale X/Y/Z | `bone.scale` | 缩放，索引 0/1/2 |
+
+Rotation 使用 Euler 模式，Quaternion 骨骼会自动转换。
+
+## Q: Bone Editor 能否批量修改多帧？
+
+可以。在 **Apply To** 中选择：
+- **Current Frame** — 只修改当前帧
+- **Frame Range** — 修改指定帧范围，每一帧都执行运算并打关键帧
+
+## Q: Execute 按钮点击后没有反应？
+
+检查以下几点：
+1. 确保处于 **Pose Mode**
+2. 确保选中了一个 **骨骼**
+3. 确保至少勾选了 **一个通道**（Loc/Rot/Scl 中至少一个 X/Y/Z）
+4. 检查 Blender 的系统控制台（Window > Toggle System Console）查看报错信息
+
+## Q: Bone Editor 支持 Undo 吗？
+
+支持。操作注册了 `bl_options = {"REGISTER", "UNDO"}`，可以通过 Ctrl+Z 撤销。
+
+## Q: 增量运算的具体公式是什么？
+
+- **Add (+)**: `新值 = 当前值 + 增量`
+- **Subtract (-)**: `新值 = 当前值 - 增量`
+
+每一帧独立计算，逐通道打关键帧。
+
+## Q: Snap 按钮有什么用？
+
+点击 Snap（📋 图标）会将当前选中的第一个通道的数值填入 Increment 输入框。例如只勾选了 Loc X，点击 Snap 后 Increment 自动变为当前帧的 X 值，方便做精确还原。
+
+详见 `docs/bone-editor.md`。
