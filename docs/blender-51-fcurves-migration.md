@@ -61,18 +61,23 @@ for frame in range(frame_start, frame_end + 1):
 
 This guarantees F-curves are created in the correct layered format.
 
-## Current Blocker
+## Resolved Issues (v2.0.0)
 
-**Symptom**: After Bake + Smooth/Predict/Gaps, console shows `(0 kf, pred 0, smooth 0)`.
+The interpolation system (补帧) was completely broken due to three combined bugs:
 
-**Root cause hypothesis**: `bone_has_fcurves()` returns `False` for all bones, so no interpolation code runs.
+1. **`_ensure_fcurve` used for read-only detection** — `fcurve_ensure_for_datablock` creates empty FCurves even during existence checks, polluting the Action and breaking `bone_has_fcurves()` logic.
+2. **Mode flags had no fallback** — "predict" mode only set `predict=True` without `fill_missing`, so bones without FCurves got 0 keyframes.
+3. **No rest-pose fallback** — When mirror + related prediction both failed, no code created base keyframes.
 
-**Possible causes being investigated**:
-1. `fcurve_ensure_for_datablock` creates F-curves but they don't contain keyframes (bake writes elsewhere)
-2. `armature_obj` argument is incorrect type for `fcurve_ensure_for_datablock`
-3. `bone.keyframe_insert()` (used in non-bake paths) writes to legacy format not visible to `fcurve_ensure_for_datablock`
-4. `animation_data` or `animation_data.action` is `None` after bake
+**Fix**: See `docs/interpolation-system.md` for complete details.
 
-**Debug needed**: Add print after `fcurve_ensure_for_datablock` to confirm F-curve creation and keyframe count.
+Key changes:
+- Added `_find_fcurve()` — read-only FCurve lookup without creation
+- All read-only functions (`get_bone_fcurves`, `bone_has_fcurves`, `_get_bone_keyframe_frames`, etc.) now use `_find_fcurve`
+- `interpolate_armature_animation` rewritten with 3-phase pipeline: fill_base → gaps → smooth
+- Mode flags fixed: every mode now ensures base keyframes (`fill_missing=True`)
+- `predict` forces all phases: fill + gaps + smooth
+- `smooth`: fill + smooth
+- `gaps`: fill + gaps
 
 <｜｜DSML｜｜parameter name="filePath" string="true">D:\blender-addon\mixamo_retarget\docs\blender-51-fcurves-migration.md
