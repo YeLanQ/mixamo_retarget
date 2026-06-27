@@ -431,10 +431,10 @@ class MIXAMO_OT_InterpolateBones(Operator):
             bone_names = [b.name for b in arm.pose.bones]
             bpy.ops.object.mode_set(mode='OBJECT')
 
-        fill_missing = self.mode in ("missing", "all")
-        fill_gaps = self.mode in ("gaps", "all")
-        smooth = self.mode in ("smooth", "all")
-        predict = self.mode in ("predict", "all")
+        fill_missing = True  # always ensure base keyframes before any operation
+        fill_gaps = self.mode in ("gaps", "predict")
+        smooth = self.mode in ("smooth", "predict")
+        predict = self.mode == "predict"
 
         wm = context.window_manager
         wm.progress_begin(0, len(bone_names))
@@ -470,11 +470,11 @@ class MIXAMO_OT_InterpolateBones(Operator):
         )
         bones_predicted = sum(
             1 for v in all_stats.values()
-            if any("predicted" in a for a in v['actions'])
+            if any(a.startswith("predict") or a == "mirror" for a in v['actions'])
         )
         bones_smoothed = sum(
             1 for v in all_stats.values()
-            if any("smoothed" in a for a in v['actions'])
+            if any(a == "smooth" for a in v['actions'])
         )
 
         label = f"{len(bone_names)} bone(s)" if len(bone_names) != 1 else f"'{bone_names[0]}'"
