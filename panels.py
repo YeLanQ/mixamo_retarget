@@ -134,7 +134,7 @@ class MIXAMO_PT_Bake(MIXAMO_PT_Base, Panel):
 
         row = col.row(align=True)
         op_pred = row.operator("mixamo_retarget.interpolate_bones",
-                               text="Predict (预测)", icon='FORECAST')
+                               text="Predict (预测)", icon='IPO_BEZIER')
         op_pred.mode = "predict"
         op_smooth2 = row.operator("mixamo_retarget.interpolate_bones",
                                   text="Smooth", icon='SMOOTHCURVE')

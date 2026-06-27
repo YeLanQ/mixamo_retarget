@@ -419,13 +419,19 @@ class MIXAMO_OT_InterpolateBones(Operator):
 
     def execute(self, context):
         s = context.scene.mixamo_retarget
-        arm = s.target_armature
 
-        if not arm:
-            self.report({'ERROR'}, "Set Target Armature first.")
+        arm = s.target_armature or context.active_object
+        if not arm or arm.type != 'ARMATURE':
+            self.report({'ERROR'}, "Set Target Armature or select an armature in the scene.")
             return {'CANCELLED'}
 
-        bpy.ops.object.mode_set(mode='OBJECT')
+        mode_was = context.mode
+        if mode_was == 'POSE':
+            selected_bones = [b.name for b in context.selected_pose_bones]
+            bone_names = selected_bones or [b.name for b in arm.pose.bones]
+        else:
+            bone_names = [b.name for b in arm.pose.bones]
+            bpy.ops.object.mode_set(mode='OBJECT')
 
         fill_missing = self.mode in ("missing", "all")
         fill_gaps = self.mode in ("gaps", "all")
@@ -433,52 +439,49 @@ class MIXAMO_OT_InterpolateBones(Operator):
         predict = self.mode in ("predict", "all")
 
         wm = context.window_manager
-        bones = list(arm.pose.bones)
-        wm.progress_begin(0, len(bones))
+        wm.progress_begin(0, len(bone_names))
 
-        def _on_progress(done, total, bone_name):
+        def _on_progress(done, total, bn):
             wm.progress_update(done)
 
-        stats = rt.interpolate_armature_animation(
-            arm,
-            s.bake_start_frame,
-            s.bake_end_frame,
-            fill_missing=fill_missing,
-            fill_gaps=fill_gaps,
-            smooth=smooth,
-            smoothing_passes=s.smoothing_passes,
-            step=s.interp_step,
-            use_mirror=s.interp_use_mirror,
-            predict=predict,
-            progress_callback=_on_progress,
-        )
+        all_stats = {}
+        for idx, bname in enumerate(bone_names):
+            bone_stats = rt.interpolate_armature_animation(
+                arm,
+                s.bake_start_frame,
+                s.bake_end_frame,
+                fill_missing=fill_missing,
+                fill_gaps=fill_gaps,
+                smooth=smooth,
+                smoothing_passes=s.smoothing_passes,
+                step=s.interp_step,
+                use_mirror=s.interp_use_mirror,
+                predict=predict,
+                progress_callback=None,
+                bone_names=[bname],
+            )
+            all_stats.update(bone_stats)
+            _on_progress(idx + 1, len(bone_names), bname)
 
         wm.progress_end()
 
-        total_added = sum(v['keyframes_added'] for v in stats.values())
+        total_added = sum(v['keyframes_added'] for v in all_stats.values())
         bones_affected = sum(
-            1 for v in stats.values()
+            1 for v in all_stats.values()
             if v['keyframes_added'] > 0 or v['actions']
         )
-        bones_missing = sum(
-            1 for v in stats.values()
-            if any("missing" in a for a in v['actions'])
-        )
-        bones_mirrored = sum(
-            1 for v in stats.values()
-            if any("mirror" in a for a in v['actions'])
-        )
         bones_predicted = sum(
-            1 for v in stats.values()
-            if any("predicted" in a or "temporal" in a for a in v['actions'])
+            1 for v in all_stats.values()
+            if any("predicted" in a for a in v['actions'])
         )
         bones_smoothed = sum(
-            1 for v in stats.values()
+            1 for v in all_stats.values()
             if any("smoothed" in a for a in v['actions'])
         )
 
-        details = f"({total_added} kf, miss {bones_missing}, mir {bones_mirrored}, pred {bones_predicted}, smooth {bones_smoothed})"
-        self.report({'INFO'}, f"Interpolated {bones_affected} bones {details}")
+        label = f"{len(bone_names)} bone(s)" if len(bone_names) != 1 else f"'{bone_names[0]}'"
+        details = f"({total_added} kf, pred {bones_predicted}, smooth {bones_smoothed})"
+        self.report({'INFO'}, f"Interpolated {label} {details}")
         return {'FINISHED'}
 
 

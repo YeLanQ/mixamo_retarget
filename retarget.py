@@ -997,10 +997,26 @@ def smooth_bone_fcurves(armature_obj, bone_name, passes=3):
             fcurve.update()
 
 
+def _clear_bone_fcurves(armature_obj, bone_name):
+    """Remove all F-curves for a given bone from the armature's action."""
+    action = armature_obj.animation_data.action if armature_obj.animation_data else None
+    if not action:
+        return
+    to_remove = []
+    prefix = f'pose.bones["{bone_name}"].'
+    for fcu in action.fcurves:
+        if fcu.data_path.startswith(prefix):
+            to_remove.append(fcu)
+    for fcu in to_remove:
+        action.fcurves.remove(fcu)
+
+
 def derive_bone_from_parent(armature_obj, bone_name, frame_start, frame_end, step=1):
     """Predict a bone's animation by deriving from its parent's world-space motion.
     At each frame, samples the parent's animated world transform and applies the
     bone's rest-pose local offset, yielding natural follow-through animation.
+
+    Overwrites any existing F-curves on the target bone.
 
     Returns (keyframes_added, error_message_or_None).
     """
@@ -1012,9 +1028,11 @@ def derive_bone_from_parent(armature_obj, bone_name, frame_start, frame_end, ste
     if not parent:
         return 0, "Bone has no parent"
 
-    action = _ensure_action(armature_obj)
-    if not bone_has_fcurves(action, parent.name):
+    _ensure_action(armature_obj)
+    if not bone_has_fcurves(armature_obj.animation_data.action, parent.name):
         return 0, f"Parent '{parent.name}' has no F-curves to derive from"
+
+    _clear_bone_fcurves(armature_obj, bone_name)
 
     rest_local = _get_rest_local(armature_obj, bone_name)
 
@@ -1084,6 +1102,7 @@ def interpolate_armature_animation(
     use_mirror: bool = True,
     predict: bool = False,
     progress_callback: callable = None,
+    bone_names: list[str] = None,
 ) -> dict:
     """Comprehensive bone animation in-betweening (补帧) for an armature.
 
@@ -1095,6 +1114,8 @@ def interpolate_armature_animation(
     progress_callback(steps_done, total_steps, current_bone_name) is called
     after each bone is processed.
 
+    If bone_names is given, only process those bones.
+
     Returns dict of per-bone stats: {bone_name: {'keyframes_added': int, 'actions': [str]}}
     """
     if not armature_obj or armature_obj.type != 'ARMATURE':
@@ -1104,10 +1125,13 @@ def interpolate_armature_animation(
     original_frame = bpy.context.scene.frame_current
     bpy.context.view_layer.objects.active = armature_obj
 
-    bones = list(armature_obj.pose.bones)
-    total = len(bones)
+    candidates = list(armature_obj.pose.bones)
+    if bone_names is not None:
+        name_set = set(bone_names)
+        candidates = [b for b in candidates if b.name in name_set]
+    total = len(candidates)
     stats = {}
-    for i, bone in enumerate(bones):
+    for i, bone in enumerate(candidates):
         bone_name = bone.name
         bone_stats = {'keyframes_added': 0, 'actions': []}
 
@@ -1132,13 +1156,14 @@ def interpolate_armature_animation(
                 bone_stats['keyframes_added'] += n
                 bone_stats['actions'].append("missing filled")
 
-        if predict and not has_fcurves:
+        if predict:
             n, err = derive_bone_from_parent(
                 armature_obj, bone_name, frame_start, frame_end, step
             )
             if err is None and n > 0:
                 bone_stats['keyframes_added'] += n
                 bone_stats['actions'].append("predicted from parent")
+                has_fcurves = True
 
         if fill_gaps and has_fcurves:
             n = fill_keyframe_gaps(
@@ -1146,14 +1171,6 @@ def interpolate_armature_animation(
             )
             bone_stats['keyframes_added'] += n
             bone_stats['actions'].append("gaps filled")
-
-        if predict and has_fcurves:
-            n = temporal_predict_frames(
-                armature_obj, bone_name, frame_start, frame_end, step
-            )
-            if n > 0:
-                bone_stats['keyframes_added'] += n
-                bone_stats['actions'].append("temporal predicted")
 
         if smooth and has_fcurves:
             smooth_bone_fcurves(armature_obj, bone_name, smoothing_passes)
