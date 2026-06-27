@@ -25,6 +25,14 @@ class MIXAMO_PT_Import(MIXAMO_PT_Base, Panel):
         row.scale_y = 1.5
         row.operator("mixamo_retarget.import_mixamo_fbx", text="Import Mixamo FBX", icon='IMPORT')
 
+        layout.separator()
+        box = layout.box()
+        box.label(text="New Mixamo Skeleton (65 bones):", icon='ARMATURE_DATA')
+        row = box.row(align=True)
+        row.prop(s, "skeleton_scale", text="Scale")
+        row.prop(s, "skeleton_name", text="")
+        box.operator("mixamo_retarget.new_mixamo_skeleton", text="Create Armature")
+
         if s.source_armature:
             box = layout.box()
             box.label(text="Source Armature:", icon='ARMATURE_DATA')

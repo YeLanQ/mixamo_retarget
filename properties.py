@@ -81,6 +81,22 @@ class MIXAMO_SceneSettings(PropertyGroup):
         default=True,
     )
 
+    skeleton_scale: FloatProperty(
+        name="Scale",
+        description="Armature object scale (0.01 = cm→m, matching FBX import)",
+        default=0.01,
+        min=0.001,
+        max=100.0,
+        step=0.1,
+        precision=3,
+    )
+
+    skeleton_name: StringProperty(
+        name="Armature Name",
+        description="Name for the new armature",
+        default="Mixamo_Armature",
+    )
+
 
 class MIXAMO_AddonPreferences(AddonPreferences):
     bl_idname = __package__
