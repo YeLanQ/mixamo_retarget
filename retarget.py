@@ -1,8 +1,483 @@
 import bpy
 import mathutils
 import re
+from dataclasses import dataclass
+from functools import cache
+from typing import Optional
+from mathutils import Matrix, Vector
 
 CONSTRAINT_PREFIX = "MIXAMO_RETARGET_"
+
+# ============================================================================
+# Bone Name Canonicalization (from VRM addon)
+# ============================================================================
+
+_BONE_NAME_LOWER_TO_UPPER_REGEX = (re.compile(r"([a-z])([A-Z])"), r"\1.\2")
+_BONE_NAME_DIGIT_REGEX = (re.compile(r"(\d+)"), r".\1.")
+_BONE_NAME_COMPONENT_SPLIT_REGEX = re.compile(r"[-._: (){}[\]<>]+")
+
+
+@cache
+def canonicalize_bone_name(name: str) -> str:
+    s = "".join(
+        chr(ord(c) - 0xFEE0) if 0x21 <= ord(c) - 0xFEE0 <= 0x7E else c
+        for c in name
+    )
+    s = re.sub(*_BONE_NAME_LOWER_TO_UPPER_REGEX, s)
+    s = s.lower()
+    s = "".join(" " if c.isspace() else c for c in s)
+    s = re.sub(*_BONE_NAME_DIGIT_REGEX, s).strip(".")
+    parts = re.split(_BONE_NAME_COMPONENT_SPLIT_REGEX, s)
+    for patterns, replacement in {
+        ("l", "左", "left"): "left",
+        ("r", "右", "right"): "right",
+    }.items():
+        parts = [replacement if p in patterns else p for p in parts]
+    return ".".join(parts)
+
+
+def names_match(a: str, b: str) -> bool:
+    return canonicalize_bone_name(a) == canonicalize_bone_name(b)
+
+
+# ============================================================================
+# Human Bone Specification (from VRM specification)
+# ============================================================================
+
+HUMAN_BONE_NAMES = [
+    "hips", "spine", "chest", "upperChest", "neck",
+    "head", "leftEye", "rightEye", "jaw",
+    "leftUpperLeg", "leftLowerLeg", "leftFoot", "leftToes",
+    "rightUpperLeg", "rightLowerLeg", "rightFoot", "rightToes",
+    "leftShoulder", "leftUpperArm", "leftLowerArm", "leftHand",
+    "rightShoulder", "rightUpperArm", "rightLowerArm", "rightHand",
+    "leftThumbMetacarpal", "leftThumbProximal", "leftThumbDistal",
+    "leftIndexProximal", "leftIndexIntermediate", "leftIndexDistal",
+    "leftMiddleProximal", "leftMiddleIntermediate", "leftMiddleDistal",
+    "leftRingProximal", "leftRingIntermediate", "leftRingDistal",
+    "leftLittleProximal", "leftLittleIntermediate", "leftLittleDistal",
+    "rightThumbMetacarpal", "rightThumbProximal", "rightThumbDistal",
+    "rightIndexProximal", "rightIndexIntermediate", "rightIndexDistal",
+    "rightMiddleProximal", "rightMiddleIntermediate", "rightMiddleDistal",
+    "rightRingProximal", "rightRingIntermediate", "rightRingDistal",
+    "rightLittleProximal", "rightLittleIntermediate", "rightLittleDistal",
+]
+
+REQUIRED_BONE_NAMES = frozenset([
+    "hips", "spine", "head",
+    "leftUpperLeg", "leftLowerLeg", "leftFoot",
+    "rightUpperLeg", "rightLowerLeg", "rightFoot",
+    "leftUpperArm", "leftLowerArm", "leftHand",
+    "rightUpperArm", "rightLowerArm", "rightHand",
+])
+
+
+# ============================================================================
+# Naming Convention Mappings
+# ============================================================================
+
+def _inv_map(m: dict) -> dict:
+    return {v: k for k, v in m.items()}
+
+
+# Mixamo → human bone name
+MIXAMO_TO_HUMAN_BONE = {
+    "mixamorig:Hips": "hips",
+    "mixamorig:Spine": "spine",
+    "mixamorig:Spine1": "chest",
+    "mixamorig:Spine2": "upperChest",
+    "mixamorig:Neck": "neck",
+    "mixamorig:Head": "head",
+    "mixamorig:LeftShoulder": "leftShoulder",
+    "mixamorig:LeftArm": "leftUpperArm",
+    "mixamorig:LeftForeArm": "leftLowerArm",
+    "mixamorig:LeftHand": "leftHand",
+    "mixamorig:RightShoulder": "rightShoulder",
+    "mixamorig:RightArm": "rightUpperArm",
+    "mixamorig:RightForeArm": "rightLowerArm",
+    "mixamorig:RightHand": "rightHand",
+    "mixamorig:LeftUpLeg": "leftUpperLeg",
+    "mixamorig:LeftLeg": "leftLowerLeg",
+    "mixamorig:LeftFoot": "leftFoot",
+    "mixamorig:LeftToeBase": "leftToes",
+    "mixamorig:RightUpLeg": "rightUpperLeg",
+    "mixamorig:RightLeg": "rightLowerLeg",
+    "mixamorig:RightFoot": "rightFoot",
+    "mixamorig:RightToeBase": "rightToes",
+    "mixamorig:LeftHandThumb1": "leftThumbMetacarpal",
+    "mixamorig:LeftHandThumb2": "leftThumbProximal",
+    "mixamorig:LeftHandThumb3": "leftThumbDistal",
+    "mixamorig:LeftHandIndex1": "leftIndexProximal",
+    "mixamorig:LeftHandIndex2": "leftIndexIntermediate",
+    "mixamorig:LeftHandIndex3": "leftIndexDistal",
+    "mixamorig:LeftHandMiddle1": "leftMiddleProximal",
+    "mixamorig:LeftHandMiddle2": "leftMiddleIntermediate",
+    "mixamorig:LeftHandMiddle3": "leftMiddleDistal",
+    "mixamorig:LeftHandRing1": "leftRingProximal",
+    "mixamorig:LeftHandRing2": "leftRingIntermediate",
+    "mixamorig:LeftHandRing3": "leftRingDistal",
+    "mixamorig:LeftHandPinky1": "leftLittleProximal",
+    "mixamorig:LeftHandPinky2": "leftLittleIntermediate",
+    "mixamorig:LeftHandPinky3": "leftLittleDistal",
+    "mixamorig:RightHandThumb1": "rightThumbMetacarpal",
+    "mixamorig:RightHandThumb2": "rightThumbProximal",
+    "mixamorig:RightHandThumb3": "rightThumbDistal",
+    "mixamorig:RightHandIndex1": "rightIndexProximal",
+    "mixamorig:RightHandIndex2": "rightIndexIntermediate",
+    "mixamorig:RightHandIndex3": "rightIndexDistal",
+    "mixamorig:RightHandMiddle1": "rightMiddleProximal",
+    "mixamorig:RightHandMiddle2": "rightMiddleIntermediate",
+    "mixamorig:RightHandMiddle3": "rightMiddleDistal",
+    "mixamorig:RightHandRing1": "rightRingProximal",
+    "mixamorig:RightHandRing2": "rightRingIntermediate",
+    "mixamorig:RightHandRing3": "rightRingDistal",
+    "mixamorig:RightHandPinky1": "rightLittleProximal",
+    "mixamorig:RightHandPinky2": "rightLittleIntermediate",
+    "mixamorig:RightHandPinky3": "rightLittleDistal",
+}
+
+# Mixamo → generic BVH standard names
+MIXAMO_TO_STANDARD = {
+    "mixamorig:Hips": "Hips",
+    "mixamorig:Spine": "Spine",
+    "mixamorig:Spine1": "Spine1",
+    "mixamorig:Spine2": "Spine2",
+    "mixamorig:Neck": "Neck",
+    "mixamorig:Head": "Head",
+    "mixamorig:LeftShoulder": "LeftShoulder",
+    "mixamorig:LeftArm": "LeftArm",
+    "mixamorig:LeftForeArm": "LeftForeArm",
+    "mixamorig:LeftHand": "LeftHand",
+    "mixamorig:RightShoulder": "RightShoulder",
+    "mixamorig:RightArm": "RightArm",
+    "mixamorig:RightForeArm": "RightForeArm",
+    "mixamorig:RightHand": "RightHand",
+    "mixamorig:LeftUpLeg": "LeftUpLeg",
+    "mixamorig:LeftLeg": "LeftLeg",
+    "mixamorig:LeftFoot": "LeftFoot",
+    "mixamorig:LeftToeBase": "LeftToeBase",
+    "mixamorig:RightUpLeg": "RightUpLeg",
+    "mixamorig:RightLeg": "RightLeg",
+    "mixamorig:RightFoot": "RightFoot",
+    "mixamorig:RightToeBase": "RightToeBase",
+}
+
+# VRM addon naming → human bone name
+VRM_TO_HUMAN_BONE = {
+    "head": "head",
+    "spine": "spine",
+    "hips": "hips",
+    "upper_arm.R": "rightUpperArm",
+    "lower_arm.R": "rightLowerArm",
+    "hand.R": "rightHand",
+    "upper_arm.L": "leftUpperArm",
+    "lower_arm.L": "leftLowerArm",
+    "hand.L": "leftHand",
+    "upper_leg.R": "rightUpperLeg",
+    "lower_leg.R": "rightLowerLeg",
+    "foot.R": "rightFoot",
+    "upper_leg.L": "leftUpperLeg",
+    "lower_leg.L": "leftLowerLeg",
+    "foot.L": "leftFoot",
+    "eye.R": "rightEye",
+    "eye.L": "leftEye",
+    "neck": "neck",
+    "shoulder.L": "leftShoulder",
+    "shoulder.R": "rightShoulder",
+    "upper_chest": "upperChest",
+    "chest": "chest",
+    "toes.R": "rightToes",
+    "toes.L": "leftToes",
+}
+
+# Biped convention → human bone name
+BIPED_TO_HUMAN_BONE = {
+    "Pelvis": "hips",
+    "Spine": "spine",
+    "Spine2": "chest",
+    "Neck": "neck",
+    "Head": "head",
+    "Clavicle": "leftShoulder",
+    "UpperArm": "leftUpperArm",
+    "Forearm": "leftLowerArm",
+    "Hand": "leftHand",
+    "Thigh": "leftUpperLeg",
+    "Calf": "leftLowerLeg",
+    "Foot": "leftFoot",
+    "Toe0": "leftToes",
+}
+
+# UE4 convention → human bone name
+UE4_TO_HUMAN_BONE: dict = {}  # populated dynamically
+
+# All naming conventions as (name, {bone_name: human_bone_name})
+NAMED_CONVENTIONS = [
+    ("Mixamo", MIXAMO_TO_HUMAN_BONE),
+    ("Mixamo→Standard", MIXAMO_TO_STANDARD),
+    ("VRM Add-on", VRM_TO_HUMAN_BONE),
+]
+
+# ============================================================================
+# Normalized armature analysis
+# ============================================================================
+
+@dataclass(frozen=True)
+class NormalizedBone:
+    name: str
+    x: float
+    y: float
+    z: float
+    children: tuple["NormalizedBone", ...]
+    parent: Optional["NormalizedBone"] = None
+
+    def recursive_len(self) -> int:
+        return 1 + sum(c.recursive_len() for c in self.children)
+
+    def all_descendants(self) -> list["NormalizedBone"]:
+        result: list[NormalizedBone] = []
+        for c in self.children:
+            result.append(c)
+            result.extend(c.all_descendants())
+        return result
+
+
+def analyze_armature(armature: bpy.types.Object) -> list[NormalizedBone]:
+    arm_data = armature.data
+    bones = arm_data.bones
+    max_x = max((abs((armature.matrix_world @ b.matrix_local).translation.x) for b in bones), default=1)
+    max_y = max((abs((armature.matrix_world @ b.matrix_local).translation.y) for b in bones), default=1)
+    max_z = max((abs((armature.matrix_world @ b.matrix_local).translation.z) for b in bones), default=1)
+    if max_x < 0.001: max_x = 1
+    if max_y < 0.001: max_y = 1
+    if max_z < 0.001: max_z = 1
+
+    import math
+    def _build(bone, parent=None):
+        pos = (armature.matrix_world @ bone.matrix_local).translation
+        nx = math.copysign(math.sqrt(abs(pos.x) / max_x), pos.x) if max_x > 0 else 0
+        ny = math.copysign(math.sqrt(abs(pos.y) / max_y), pos.y) if max_y > 0 else 0
+        nz = math.copysign(math.sqrt(abs(pos.z) / max_z), pos.z) if max_z > 0 else 0
+        nb = NormalizedBone(
+            name=bone.name, x=nx, y=ny, z=nz,
+            children=tuple(_build(c, bone) for c in bone.children),
+            parent=parent,
+        )
+        return nb
+
+    roots = [_build(b) for b in bones if not b.parent]
+    return roots
+
+
+# ============================================================================
+# Multi-pass bone matching
+# ============================================================================
+
+@dataclass
+class MatchedPair:
+    bone_name: str
+    human_bone: str
+    is_required: bool
+    score: int = 0
+
+
+def _normalize(name: str) -> str:
+    name = name.lower()
+    if ":" in name:
+        name = name.split(":")[-1]
+    return re.sub(r"[^a-z0-9_]", "", name)
+
+
+def is_mixamo_bone(name: str) -> bool:
+    return "mixamorig" in name.lower()
+
+
+def _match_by_name(
+    bone_name: str,
+    mapping: dict[str, str],
+) -> str | None:
+    canon = canonicalize_bone_name(bone_name)
+    for mapped_name, human_bone in mapping.items():
+        if names_match(mapped_name, bone_name):
+            return human_bone
+    return None
+
+
+def _try_convention(
+    bone_name: str,
+    convention: dict[str, str],
+) -> str | None:
+    for key, human_bone_name in convention.items():
+        if names_match(key, bone_name):
+            return human_bone_name
+    return None
+
+
+def _match_by_position(
+    bone: NormalizedBone,
+    armature: bpy.types.Object,
+) -> str | None:
+    """Try to guess human bone from position in normalized space.
+    Y-axis is up, Z is forward (Blender convention).
+    """
+    x, y, z = bone.x, bone.y, bone.z
+
+    # Hips: root, around origin, lowest central bone
+    if bone.parent is None and y < 0.1:
+        desc = bone.all_descendants()
+        has_legs = sum(1 for d in desc if d.y < -0.3)
+        if has_legs >= 2:
+            return "hips"
+
+    # Spine: positive Y above hips
+    if bone.parent and y > 0.1 and abs(x) < 0.15 and z > -0.1:
+        return "spine"
+
+    # Chest: above spine, slight Y
+    if bone.parent and y > 0.3 and abs(x) < 0.2:
+        return "chest"
+
+    # Neck: high positive Y, central
+    if bone.parent and y > 0.7 and abs(x) < 0.1:
+        return "neck"
+
+    # Head: topmost central
+    if bone.parent and y > 0.85 and abs(x) < 0.15:
+        return "head"
+
+    # Left arm (negative X)
+    if x < -0.3:
+        if y > -0.1:
+            pname = bone.parent.name.lower() if bone.parent else ""
+            if any(k in pname for k in ("shoulder", "clavicle", "chest", "spine")):
+                return "leftUpperArm"
+            if "elbow" in bone.name.lower() or "forearm" in bone.name.lower():
+                return "leftLowerArm"
+            if "hand" in bone.name.lower() or "wrist" in bone.name.lower():
+                return "leftHand"
+            return "leftUpperArm"
+
+    # Right arm (positive X)
+    if x > 0.3:
+        if y > -0.1:
+            pname = bone.parent.name.lower() if bone.parent else ""
+            if any(k in pname for k in ("shoulder", "clavicle", "chest", "spine")):
+                return "rightUpperArm"
+            if "elbow" in bone.name.lower() or "forearm" in bone.name.lower():
+                return "rightLowerArm"
+            if "hand" in bone.name.lower() or "wrist" in bone.name.lower():
+                return "rightHand"
+            return "rightUpperArm"
+
+    # Left leg (negative X, low Y)
+    if x < -0.1 and y < -0.2:
+        if "shin" in bone.name.lower() or "calf" in bone.name.lower() or "leg" in bone.name.lower():
+            return "leftLowerLeg"
+        if "foot" in bone.name.lower() or "ankle" in bone.name.lower():
+            return "leftFoot"
+        if "toe" in bone.name.lower():
+            return "leftToes"
+        return "leftUpperLeg"
+
+    # Right leg (positive X, low Y)
+    if x > 0.1 and y < -0.2:
+        if "shin" in bone.name.lower() or "calf" in bone.name.lower() or "leg" in bone.name.lower():
+            return "rightLowerLeg"
+        if "foot" in bone.name.lower() or "ankle" in bone.name.lower():
+            return "rightFoot"
+        if "toe" in bone.name.lower():
+            return "rightToes"
+        return "rightUpperLeg"
+
+    return None
+
+
+# ============================================================================
+# Main skeleton detection
+# ============================================================================
+
+def detect_skeleton(
+    armature_obj: bpy.types.Object,
+) -> list[tuple[str, str]]:
+    """Detect human skeleton from an armature object.
+    Returns list of (actual_bone_name, human_bone_name).
+    """
+    result: list[tuple[str, str]] = []
+    used_human_bones: set[str] = set()
+    used_bones: set[str] = set()
+    bones = armature_obj.data.bones
+    norm_roots = analyze_armature(armature_obj)
+    norm_map = {nb.name: nb for root in norm_roots for nb in [root] + root.all_descendants()}
+
+    # Pass 1: Try naming conventions
+    for bone in bones:
+        for convention_name, convention in NAMED_CONVENTIONS:
+            human_bone = _try_convention(bone.name, convention)
+            if human_bone and human_bone not in used_human_bones and bone.name not in used_bones:
+                result.append((bone.name, human_bone))
+                used_human_bones.add(human_bone)
+                used_bones.add(bone.name)
+                break
+
+    # Pass 2: Try matching parent bone names (e.g., "Hips" → "hips")
+    for bone in bones:
+        if bone.name in used_bones:
+            continue
+        norm = _normalize(bone.name)
+        for hb in HUMAN_BONE_NAMES:
+            if hb not in used_human_bones and _normalize(hb) == norm:
+                result.append((bone.name, hb))
+                used_human_bones.add(hb)
+                used_bones.add(bone.name)
+                break
+
+    # Pass 3: Try position-based detection for remaining bones
+    for root in norm_roots:
+        all_bones_norm = [root] + root.all_descendants()
+        for nb in all_bones_norm:
+            if nb.name in used_bones:
+                continue
+            hb = _match_by_position(nb, armature_obj)
+            if hb and hb not in used_human_bones:
+                result.append((nb.name, hb))
+                used_human_bones.add(hb)
+                used_bones.add(nb.name)
+
+    return result
+
+
+# ============================================================================
+# Bone mapping between source and target armatures
+# ============================================================================
+
+def build_mapping_from_human_bones(
+    source_arm: bpy.types.Object,
+    target_arm: bpy.types.Object,
+) -> list[tuple[str, str]]:
+    """Build bone mapping by detecting human skeleton on both armatures
+    and matching them via the human bone specification.
+    Returns list of (source_bone_name, target_bone_name).
+    """
+    src_detected = detect_skeleton(source_arm)
+    tgt_detected = detect_skeleton(target_arm)
+
+    src_by_human = {hb: bn for bn, hb in src_detected}
+    tgt_by_human = {hb: bn for bn, hb in tgt_detected}
+
+    result = []
+    used_tgt = set()
+    for hb in HUMAN_BONE_NAMES:
+        src_bn = src_by_human.get(hb)
+        tgt_bn = tgt_by_human.get(hb)
+        if src_bn and tgt_bn and tgt_bn not in used_tgt:
+            result.append((src_bn, tgt_bn))
+            used_tgt.add(tgt_bn)
+
+    return result
+
+
+# ============================================================================
+# (Legacy) auto_build_mapping — using MIXAMO_BONE_HINTS for backward compat
+# ============================================================================
 
 MIXAMO_BONE_HINTS = [
     ("Hips",            ["hips", "pelvis", "root", "Hip", "Pelvis", "mixamorig:Hips"]),
@@ -60,17 +535,6 @@ MIXAMO_BONE_HINTS = [
 ]
 
 
-def _normalize(name: str) -> str:
-    name = name.lower()
-    if ":" in name:
-        name = name.split(":")[-1]
-    return re.sub(r"[^a-z0-9_]", "", name)
-
-
-def is_mixamo_bone(name: str) -> bool:
-    return "mixamorig" in name.lower()
-
-
 def auto_build_mapping(source_arm: bpy.types.Object,
                        target_arm: bpy.types.Object) -> list[tuple[str, str]]:
     src_name_list = list(source_arm.data.bones.keys())
@@ -79,8 +543,7 @@ def auto_build_mapping(source_arm: bpy.types.Object,
     tgt_norm_map = {b.name: _normalize(b.name) for b in target_arm.data.bones}
 
     def _find_bone(name: str, norm_map: dict, name_list: list) -> str | None:
-        exact = norm_map.get(name)
-        if exact is not None:
+        if name in norm_map:
             return name
         norm = _normalize(name)
         for bn in name_list:
@@ -117,6 +580,10 @@ def auto_build_mapping(source_arm: bpy.types.Object,
 
     return result
 
+
+# ============================================================================
+# Constraint-based retargeting
+# ============================================================================
 
 def apply_retargeting_constraints(
     source_arm: bpy.types.Object,

@@ -58,6 +58,17 @@ class MIXAMO_PT_Retarget(MIXAMO_PT_Base, Panel):
 
         layout.separator()
 
+        # Skeleton detection buttons
+        row = layout.row(align=True)
+        if s.source_armature:
+            row.operator("mixamo_retarget.detect_skeleton",
+                         text="Detect Source", icon='BONE_DATA').target = "source"
+        if s.target_armature:
+            row.operator("mixamo_retarget.detect_skeleton",
+                         text="Detect Target", icon='BONE_DATA').target = "target"
+
+        layout.separator()
+
         layout.label(text="Bone Mapping:", icon='BONE_DATA')
 
         if s.source_armature and s.target_armature:

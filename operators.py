@@ -119,10 +119,35 @@ class MIXAMO_OT_SelectMixamoSource(Operator):
         return {'FINISHED'}
 
 
+class MIXAMO_OT_DetectSkeleton(Operator):
+    """Detect human skeleton structure from the selected armature's bone positions"""
+    bl_idname = "mixamo_retarget.detect_skeleton"
+    bl_label = "Detect Skeleton"
+    bl_description = "Detect human bone structure from bone positions (VRM-style)"
+
+    target: StringProperty(default="source")
+
+    def execute(self, context):
+        s = context.scene.mixamo_retarget
+        arm = s.source_armature if self.target == "source" else s.target_armature
+        label = "Source" if self.target == "source" else "Target"
+
+        if not arm:
+            self.report({'ERROR'}, f"Set {label} Armature first.")
+            return {'CANCELLED'}
+
+        detected = rt.detect_skeleton(arm)
+        lines = "\n".join(f"  {bn:40s} → {hb}" for bn, hb in detected)
+        self.report({'INFO'}, f"{label}: detected {len(detected)} human bones\n{lines}")
+        print(f"[Mixamo Retarget] {label} skeleton detection ({len(detected)} bones):\n{lines}")
+        return {'FINISHED'}
+
+
 class MIXAMO_OT_AutoMapBones(Operator):
     """Auto-match bone names between source and target armature"""
     bl_idname = "mixamo_retarget.auto_map_bones"
     bl_label = "Auto-Match Bones"
+    bl_description = "Auto-detect human skeleton on both armatures and build bone mapping"
 
     def execute(self, context):
         s = context.scene.mixamo_retarget
@@ -133,7 +158,12 @@ class MIXAMO_OT_AutoMapBones(Operator):
             self.report({'ERROR'}, "Set the Target Armature first.")
             return {'CANCELLED'}
 
-        pairs = rt.auto_build_mapping(s.source_armature, s.target_armature)
+        pairs = rt.build_mapping_from_human_bones(
+            s.source_armature, s.target_armature
+        )
+        if not pairs:
+            pairs = rt.auto_build_mapping(s.source_armature, s.target_armature)
+
         s.bone_mappings.clear()
 
         for src, tgt in pairs:
@@ -421,6 +451,7 @@ _classes = [
     MIXAMO_OT_ImportMixamoFBX,
     MIXAMO_OT_SelectMixamoTarget,
     MIXAMO_OT_SelectMixamoSource,
+    MIXAMO_OT_DetectSkeleton,
     MIXAMO_OT_AutoMapBones,
     MIXAMO_OT_AddBoneMapping,
     MIXAMO_OT_RemoveBoneMapping,
