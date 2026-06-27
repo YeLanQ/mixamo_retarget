@@ -1011,44 +1011,168 @@ def _clear_bone_fcurves(armature_obj, bone_name):
         action.fcurves.remove(fcu)
 
 
-def derive_bone_from_parent(armature_obj, bone_name, frame_start, frame_end, step=1):
-    """Predict a bone's animation by deriving from its parent's world-space motion.
-    At each frame, samples the parent's animated world transform and applies the
-    bone's rest-pose local offset, yielding natural follow-through animation.
+def _find_related_bones(armature_obj, bone_name, use_mirror=True):
+    """Find all bones related to the given bone, ordered by prediction priority.
+    Returns list of (relationship_type, bone_name).
+    Priority: mirror > parent > grandparent(chain) > sibling > child.
+    """
+    data_bones = armature_obj.data.bones
+    bone = data_bones.get(bone_name)
+    if not bone:
+        return []
 
-    Overwrites any existing F-curves on the target bone.
+    related = []
+    seen = {bone_name}
 
+    if use_mirror:
+        mirror = _mirror_bone_name(bone_name)
+        if mirror and mirror in data_bones:
+            related.append(('mirror', mirror))
+            seen.add(mirror)
+
+    if bone.parent and bone.parent.name not in seen:
+        related.append(('parent', bone.parent.name))
+        seen.add(bone.parent.name)
+
+    ancestor = bone.parent.parent if bone.parent else None
+    while ancestor and ancestor.name not in seen:
+        related.append(('chain_ancestor', ancestor.name))
+        seen.add(ancestor.name)
+        ancestor = ancestor.parent
+
+    if bone.parent:
+        for sibling in bone.parent.children:
+            if sibling.name not in seen:
+                related.append(('sibling', sibling.name))
+                seen.add(sibling.name)
+
+    for child in bone.children:
+        if child.name not in seen:
+            related.append(('child', child.name))
+            seen.add(child.name)
+
+    return related
+
+
+def _predict_bone_from_source(armature_obj, bone_name, source_name, rel_type, frame_start, frame_end, step=1):
+    """Derive bone animation from a related source bone using the appropriate transform.
     Returns (keyframes_added, error_message_or_None).
     """
     bone = armature_obj.pose.bones.get(bone_name)
-    if not bone:
-        return 0, "Bone not found"
-
-    parent = bone.parent
-    if not parent:
-        return 0, "Bone has no parent"
+    source = armature_obj.pose.bones.get(source_name)
+    if not bone or not source:
+        return 0, f"Bone or source not found"
 
     _ensure_action(armature_obj)
-    if not bone_has_fcurves(armature_obj.animation_data.action, parent.name):
-        return 0, f"Parent '{parent.name}' has no F-curves to derive from"
+    action = armature_obj.animation_data.action
 
-    _clear_bone_fcurves(armature_obj, bone_name)
+    source_edit = armature_obj.data.bones[source_name]
 
-    rest_local = _get_rest_local(armature_obj, bone_name)
+    if rel_type == 'mirror':
+        if not bone_has_fcurves(action, source_name):
+            return 0, f"Mirror source '{source_name}' has no F-curves"
+        _clear_bone_fcurves(armature_obj, bone_name)
+        keyframes_added = 0
+        for frame in range(frame_start, frame_end + 1, step):
+            bpy.context.scene.frame_set(frame)
+            loc = source.location.copy()
+            rot = source.rotation_quaternion.copy()
+            scl = source.scale.copy()
+            loc.x = -loc.x
+            rot.x = -rot.x
+            rot.w = -rot.w
+            bone.location = loc
+            bone.rotation_quaternion = rot
+            bone.scale = scl
+            _keyframe_bone(armature_obj, bone_name, frame)
+            keyframes_added += 1
+        return keyframes_added, None
 
-    keyframes_added = 0
-    for frame in range(frame_start, frame_end + 1, step):
-        bpy.context.scene.frame_set(frame)
-        parent_mat = parent.matrix
-        desired = parent_mat @ rest_local
-        loc, rot, scl = desired.decompose()
-        bone.location = loc
-        bone.rotation_quaternion = rot
-        bone.scale = scl
-        _keyframe_bone(armature_obj, bone_name, frame)
-        keyframes_added += 1
+    elif rel_type == 'parent':
+        if not bone_has_fcurves(action, source_name):
+            return 0, f"Parent source '{source_name}' has no F-curves"
+        _clear_bone_fcurves(armature_obj, bone_name)
+        rest_local = _get_rest_local(armature_obj, bone_name)
+        keyframes_added = 0
+        for frame in range(frame_start, frame_end + 1, step):
+            bpy.context.scene.frame_set(frame)
+            desired = source.matrix @ rest_local
+            loc, rot, scl = desired.decompose()
+            bone.location = loc
+            bone.rotation_quaternion = rot
+            bone.scale = scl
+            _keyframe_bone(armature_obj, bone_name, frame)
+            keyframes_added += 1
+        return keyframes_added, None
 
-    return keyframes_added, None
+    elif rel_type == 'chain_ancestor':
+        if not bone_has_fcurves(action, source_name):
+            return 0, f"Ancestor source '{source_name}' has no F-curves"
+        _clear_bone_fcurves(armature_obj, bone_name)
+        source_rest = source_edit.matrix_local
+        bone_rest = armature_obj.data.bones[bone_name].matrix_local
+        offset = source_rest.inverted() @ bone_rest
+        keyframes_added = 0
+        for frame in range(frame_start, frame_end + 1, step):
+            bpy.context.scene.frame_set(frame)
+            desired = source.matrix @ offset
+            loc, rot, scl = desired.decompose()
+            bone.location = loc
+            bone.rotation_quaternion = rot
+            bone.scale = scl
+            _keyframe_bone(armature_obj, bone_name, frame)
+            keyframes_added += 1
+        return keyframes_added, None
+
+    elif rel_type in ('sibling', 'child'):
+        if not bone_has_fcurves(action, source_name):
+            return 0, f"Source '{source_name}' has no F-curves"
+        _clear_bone_fcurves(armature_obj, bone_name)
+        source_rest = source_edit.matrix_local
+        bone_rest = armature_obj.data.bones[bone_name].matrix_local
+        source_parent_rest = source_edit.parent.matrix_local if source_edit.parent else Matrix.Identity(4)
+        bone_parent_rest = armature_obj.data.bones[bone_name].parent.matrix_local if armature_obj.data.bones[bone_name].parent else Matrix.Identity(4)
+        if rel_type == 'sibling' and source_edit.parent:
+            ref_rest = source_edit.parent.matrix_local
+            offset = ref_rest.inverted() @ bone_rest
+        else:
+            offset = bone_parent_rest.inverted() @ bone_rest
+        keyframes_added = 0
+        for frame in range(frame_start, frame_end + 1, step):
+            bpy.context.scene.frame_set(frame)
+            source_parent_world = source.parent.matrix if source.parent else Matrix.Identity(4)
+            desired = source_parent_world @ offset
+            loc, rot, scl = desired.decompose()
+            bone.location = loc
+            bone.rotation_quaternion = rot
+            bone.scale = scl
+            _keyframe_bone(armature_obj, bone_name, frame)
+            keyframes_added += 1
+        return keyframes_added, None
+
+    return 0, f"Unknown relationship type '{rel_type}'"
+
+
+def predict_bone_from_related(armature_obj, bone_name, frame_start, frame_end, step=1, use_mirror=True):
+    """Predict a bone's animation by scanning all related bones for animation data.
+    Priority order: mirror > parent > chain ancestor > sibling > child.
+    The first related bone that has F-curves is used for derivation.
+
+    Returns (keyframes_added, source_name, relationship_type, error_or_None).
+    """
+    related = _find_related_bones(armature_obj, bone_name, use_mirror)
+    if not related:
+        return 0, None, None, "No related bones found"
+
+    for rel_type, rel_name in related:
+        n, err = _predict_bone_from_source(
+            armature_obj, bone_name, rel_name, rel_type,
+            frame_start, frame_end, step,
+        )
+        if err is None and n > 0:
+            return n, rel_name, rel_type, None
+
+    return 0, None, None, "No related bones with animation"
 
 
 
@@ -1157,12 +1281,13 @@ def interpolate_armature_animation(
                 bone_stats['actions'].append("missing filled")
 
         if predict:
-            n, err = derive_bone_from_parent(
-                armature_obj, bone_name, frame_start, frame_end, step
+            n, src_name, rel_type, err = predict_bone_from_related(
+                armature_obj, bone_name, frame_start, frame_end, step,
+                use_mirror=use_mirror,
             )
             if err is None and n > 0:
                 bone_stats['keyframes_added'] += n
-                bone_stats['actions'].append("predicted from parent")
+                bone_stats['actions'].append(f"predicted from {rel_type}")
                 has_fcurves = True
 
         if fill_gaps and has_fcurves:
