@@ -1,10 +1,9 @@
 import bpy
 import os
 import json
-from math import radians
 from bpy.types import Operator, Armature
 from bpy.props import StringProperty, BoolProperty, IntProperty
-from mathutils import Vector, Matrix
+from mathutils import Vector
 
 from . import retarget as rt
 
@@ -96,74 +95,74 @@ class MIXAMO_OT_NewMixamoSkeleton(Operator):
     bl_description = "Create a Mixamo-standard armature with exact bone data from mixamo.fbx"
     bl_options = {"REGISTER", "UNDO"}
 
-    # Exact bone data from mixamo.fbx (cm units). Scaled by height/REF_HEIGHT to meter coords.
-    # Order matters: parents must appear before children.
+    # Exact bone data + roll from mixamo.fbx. Coords in cm, armature.scale converts to Blender units.
+    # Order matches FBX: parents precede children.
     _BONE_DATA = [
-        ("mixamorig:Hips", "", (-8e-06, 104.274872, 1.554316), (-1.3e-05, 114.833229, 1.690704)),
-        ("mixamorig:Spine", "mixamorig:Hips", (-1.3e-05, 114.456467, 1.685837), (-1.3e-05, 124.350426, 0.215126)),
-        ("mixamorig:Spine1", "mixamorig:Spine", (-1.3e-05, 124.350426, 0.215126), (-1.3e-05, 133.571182, -1.155516)),
-        ("mixamorig:Spine2", "mixamorig:Spine1", (-1.3e-05, 133.571182, -1.155516), (-1.2e-05, 147.171143, -2.82016)),
-        ("mixamorig:Neck", "mixamorig:Spine2", (-1.2e-05, 150.3116, -3.204555), (-1.1e-05, 160.003632, -4.390865)),
-        ("mixamorig:Head", "mixamorig:Neck", (-1.1e-05, 159.929474, -1.519546), (-9e-06, 183.036057, -4.347806)),
-        ("mixamorig:HeadTop_End", "mixamorig:Head", (-9e-06, 181.966858, 5.981553), (-7e-06, 205.073441, 3.153292)),
-        ("mixamorig:RightShoulder", "mixamorig:Spine2", (-4.569982, 144.586105, -3.316402), (-15.162832, 144.061295, -5.548502)),
-        ("mixamorig:RightArm", "mixamorig:RightShoulder", (-15.162832, 144.061295, -5.548502), (-43.004356, 144.061295, -5.548497)),
-        ("mixamorig:RightForeArm", "mixamorig:RightArm", (-43.004353, 144.06131, -5.548507), (-71.333199, 144.06131, -5.548503)),
-        ("mixamorig:RightHand", "mixamorig:RightForeArm", (-71.333191, 144.061295, -5.548489), (-79.559967, 144.061295, -5.548488)),
-        ("mixamorig:RightHandThumb1", "mixamorig:RightHand", (-73.797997, 142.487305, -2.866636), (-77.013184, 140.614532, -0.942356)),
-        ("mixamorig:RightHandThumb2", "mixamorig:RightHandThumb1", (-77.013191, 140.614532, -0.942354), (-79.668022, 139.086548, 0.570252)),
-        ("mixamorig:RightHandThumb3", "mixamorig:RightHandThumb2", (-79.668015, 139.086548, 0.570255), (-81.686836, 137.93454, 1.67831)),
-        ("mixamorig:RightHandThumb4", "mixamorig:RightHandThumb3", (-81.686836, 137.93454, 1.67831), (-83.574936, 136.7892, 3.002623)),
-        ("mixamorig:RightHandIndex1", "mixamorig:RightHand", (-80.441475, 143.543427, -3.288654), (-84.141472, 143.543427, -3.287439)),
-        ("mixamorig:RightHandIndex2", "mixamorig:RightHandIndex1", (-84.141472, 143.543427, -3.287439), (-86.991486, 143.543457, -3.287961)),
-        ("mixamorig:RightHandIndex3", "mixamorig:RightHandIndex2", (-86.991486, 143.543457, -3.287961), (-89.763664, 143.543442, -3.28798)),
-        ("mixamorig:RightHandIndex4", "mixamorig:RightHandIndex3", (-89.763664, 143.543442, -3.28798), (-92.535851, 143.543442, -3.288483)),
-        ("mixamorig:RightHandMiddle1", "mixamorig:RightHand", (-80.8657, 144.061249, -5.548513), (-84.565712, 144.061249, -5.544801)),
-        ("mixamorig:RightHandMiddle2", "mixamorig:RightHandMiddle1", (-84.565712, 144.061249, -5.544801), (-87.515701, 144.061264, -5.546855)),
-        ("mixamorig:RightHandMiddle3", "mixamorig:RightHandMiddle2", (-87.515701, 144.061264, -5.546855), (-90.462326, 144.061264, -5.547009)),
-        ("mixamorig:RightHandMiddle4", "mixamorig:RightHandMiddle3", (-90.462326, 144.061264, -5.547009), (-93.408958, 144.061279, -5.548146)),
-        ("mixamorig:RightHandRing1", "mixamorig:RightHand", (-80.43679, 144.018219, -7.413624), (-83.816063, 144.018219, -7.414678)),
-        ("mixamorig:RightHandRing2", "mixamorig:RightHandRing1", (-83.816063, 144.018219, -7.414678), (-86.705757, 144.018234, -7.414299)),
-        ("mixamorig:RightHandRing3", "mixamorig:RightHandRing2", (-86.705757, 144.018234, -7.414299), (-89.344566, 144.018234, -7.413358)),
-        ("mixamorig:RightHandRing4", "mixamorig:RightHandRing3", (-89.344566, 144.018234, -7.413358), (-91.983368, 144.018234, -7.408198)),
-        ("mixamorig:RightHandPinky1", "mixamorig:RightHand", (-79.409866, 143.574585, -9.354769), (-83.009872, 143.574554, -9.358516)),
-        ("mixamorig:RightHandPinky2", "mixamorig:RightHandPinky1", (-83.009872, 143.574554, -9.358516), (-85.109848, 143.574539, -9.364256)),
-        ("mixamorig:RightHandPinky3", "mixamorig:RightHandPinky2", (-85.109848, 143.574539, -9.364256), (-87.225624, 143.574509, -9.367936)),
-        ("mixamorig:RightHandPinky4", "mixamorig:RightHandPinky3", (-87.225624, 143.574509, -9.367936), (-89.3414, 143.574493, -9.371443)),
-        ("mixamorig:LeftShoulder", "mixamorig:Spine2", (4.570434, 144.585907, -3.316374), (15.162806, 144.06131, -5.548495)),
-        ("mixamorig:LeftArm", "mixamorig:LeftShoulder", (15.162806, 144.06131, -5.548495), (43.004326, 144.061295, -5.548472)),
-        ("mixamorig:LeftForeArm", "mixamorig:LeftArm", (43.004326, 144.061295, -5.548472), (71.333168, 144.061249, -5.548449)),
-        ("mixamorig:LeftHand", "mixamorig:LeftForeArm", (71.33316, 144.061249, -5.548455), (79.561035, 144.061234, -5.548448)),
-        ("mixamorig:LeftHandThumb1", "mixamorig:LeftHand", (73.799301, 142.485062, -2.86672), (77.017113, 140.613007, -0.950229)),
-        ("mixamorig:LeftHandThumb2", "mixamorig:LeftHandThumb1", (77.017105, 140.613007, -0.950233), (79.673126, 139.084198, 0.564276)),
-        ("mixamorig:LeftHandThumb3", "mixamorig:LeftHandThumb2", (79.673126, 139.084198, 0.564275), (81.694016, 137.930115, 1.679409)),
-        ("mixamorig:LeftHandThumb4", "mixamorig:LeftHandThumb3", (81.694016, 137.93013, 1.679407), (83.602867, 136.779297, 2.979897)),
-        ("mixamorig:LeftHandIndex1", "mixamorig:LeftHand", (80.442467, 143.543213, -3.288584), (84.142464, 143.543198, -3.288907)),
-        ("mixamorig:LeftHandIndex2", "mixamorig:LeftHandIndex1", (84.142464, 143.543198, -3.288907), (86.99247, 143.543182, -3.288556)),
-        ("mixamorig:LeftHandIndex3", "mixamorig:LeftHandIndex2", (86.99247, 143.543182, -3.288556), (89.767326, 143.543167, -3.288583)),
-        ("mixamorig:LeftHandIndex4", "mixamorig:LeftHandIndex3", (89.767326, 143.543167, -3.288583), (92.542191, 143.543167, -3.288682)),
-        ("mixamorig:LeftHandMiddle1", "mixamorig:LeftHand", (80.866562, 144.061279, -5.548411), (84.566559, 144.061279, -5.548642)),
-        ("mixamorig:LeftHandMiddle2", "mixamorig:LeftHandMiddle1", (84.566559, 144.061279, -5.548642), (87.516556, 144.061264, -5.548701)),
-        ("mixamorig:LeftHandMiddle3", "mixamorig:LeftHandMiddle2", (87.516556, 144.061264, -5.548701), (90.469421, 144.061264, -5.548638)),
-        ("mixamorig:LeftHandMiddle4", "mixamorig:LeftHandMiddle3", (90.469421, 144.061264, -5.548638), (93.422279, 144.061264, -5.54841)),
-        ("mixamorig:LeftHandRing1", "mixamorig:LeftHand", (80.437691, 144.018219, -7.413529), (83.5877, 144.018219, -7.413487)),
-        ("mixamorig:LeftHandRing2", "mixamorig:LeftHandRing1", (83.5877, 144.018219, -7.413487), (86.537689, 144.018204, -7.413447)),
-        ("mixamorig:LeftHandRing3", "mixamorig:LeftHandRing2", (86.537689, 144.018204, -7.413447), (89.182007, 144.018204, -7.413414)),
-        ("mixamorig:LeftHandRing4", "mixamorig:LeftHandRing3", (89.182007, 144.018188, -7.413391), (91.826324, 144.018188, -7.413271)),
-        ("mixamorig:LeftHandPinky1", "mixamorig:LeftHand", (79.410942, 143.574371, -9.354712), (83.010902, 143.574402, -9.339987)),
-        ("mixamorig:LeftHandPinky2", "mixamorig:LeftHandPinky1", (83.010902, 143.574402, -9.339987), (85.110901, 143.574432, -9.332282)),
-        ("mixamorig:LeftHandPinky3", "mixamorig:LeftHandPinky2", (85.110901, 143.574432, -9.332282), (87.236404, 143.574432, -9.324767)),
-        ("mixamorig:LeftHandPinky4", "mixamorig:LeftHandPinky3", (87.236404, 143.574432, -9.324767), (89.361916, 143.574448, -9.31851)),
-        ("mixamorig:RightUpLeg", "mixamorig:Hips", (-8.207794, 97.523209, -0.045244), (-8.207795, 53.15308, 0.300695)),
-        ("mixamorig:RightLeg", "mixamorig:RightUpLeg", (-8.207795, 53.15308, 0.300695), (-8.207794, 8.729401, -2.742842)),
-        ("mixamorig:RightFoot", "mixamorig:RightLeg", (-8.207794, 8.729401, -2.742842), (-8.207798, 0.000729, 7.967721)),
-        ("mixamorig:RightToeBase", "mixamorig:RightFoot", (-8.207797, 0.000728, 7.967721), (-8.2078, 5.2e-05, 17.245842)),
-        ("mixamorig:RightToe_End", "mixamorig:RightToeBase", (-8.207799, 5.2e-05, 17.245842), (-8.207802, -0.000624, 26.523964)),
-        ("mixamorig:LeftUpLeg", "mixamorig:Hips", (8.207784, 97.523178, -0.04524), (8.207782, 53.153145, 0.301718)),
-        ("mixamorig:LeftLeg", "mixamorig:LeftUpLeg", (8.207782, 53.153145, 0.301718), (8.207782, 8.729473, -2.742675)),
-        ("mixamorig:LeftFoot", "mixamorig:LeftLeg", (8.207782, 8.729473, -2.742675), (8.207779, 0.000805, 7.967885)),
-        ("mixamorig:LeftToeBase", "mixamorig:LeftFoot", (8.207779, 0.000805, 7.967887), (8.207776, 0.000128, 17.246023)),
-        ("mixamorig:LeftToe_End", "mixamorig:LeftToeBase", (8.207776, 0.000129, 17.246023), (8.207773, -0.000548, 26.524158)),
+        ("mixamorig:Hips", "", (-7.727e-06, 104.274872, 1.554316), (-1.302e-05, 114.833229, 1.690704), 0.0),
+        ("mixamorig:Spine", "mixamorig:Hips", (-1.283e-05, 114.456467, 1.685837), (-1.284e-05, 124.350426, 0.215126), -0.0),
+        ("mixamorig:Spine1", "mixamorig:Spine", (-1.284e-05, 124.350426, 0.215126), (-1.285e-05, 133.571182, -1.155516), -0.0),
+        ("mixamorig:Spine2", "mixamorig:Spine1", (-1.285e-05, 133.571182, -1.155516), (-1.186e-05, 147.171143, -2.82016), -0.0),
+        ("mixamorig:Neck", "mixamorig:Spine2", (-1.163e-05, 150.3116, -3.204555), (-1.093e-05, 160.003632, -4.390865), -0.0),
+        ("mixamorig:Head", "mixamorig:Neck", (-1.117e-05, 159.929474, -1.519546), (-9.489e-06, 183.036057, -4.347806), -0.0),
+        ("mixamorig:HeadTop_End", "mixamorig:Head", (-9.032e-06, 181.966858, 5.981553), (-7.353e-06, 205.073441, 3.153292), -0.0),
+        ("mixamorig:RightShoulder", "mixamorig:Spine2", (-4.569982, 144.586105, -3.316402), (-15.162832, 144.061295, -5.548502), -1.7887),
+        ("mixamorig:RightArm", "mixamorig:RightShoulder", (-15.162832, 144.061295, -5.548502), (-43.004356, 144.061295, -5.548497), -1.5708),
+        ("mixamorig:RightForeArm", "mixamorig:RightArm", (-43.004353, 144.06131, -5.548507), (-71.333199, 144.06131, -5.548503), -1.5708),
+        ("mixamorig:RightHand", "mixamorig:RightForeArm", (-71.333191, 144.061295, -5.548489), (-79.559967, 144.061295, -5.548488), -1.5708),
+        ("mixamorig:RightHandThumb1", "mixamorig:RightHand", (-73.797997, 142.487305, -2.866636), (-77.013184, 140.614532, -0.942356), -0.77),
+        ("mixamorig:RightHandThumb2", "mixamorig:RightHandThumb1", (-77.013191, 140.614532, -0.942354), (-79.668022, 139.086548, 0.570252), -0.8034),
+        ("mixamorig:RightHandThumb3", "mixamorig:RightHandThumb2", (-79.668015, 139.086548, 0.570255), (-81.686836, 137.93454, 1.67831), -0.828),
+        ("mixamorig:RightHandThumb4", "mixamorig:RightHandThumb3", (-81.686836, 137.93454, 1.67831), (-83.574936, 136.7892, 3.002623), -0.9052),
+        ("mixamorig:RightHandIndex1", "mixamorig:RightHand", (-80.441475, 143.543427, -3.288654), (-84.141472, 143.543427, -3.287439), -1.5705),
+        ("mixamorig:RightHandIndex2", "mixamorig:RightHandIndex1", (-84.141472, 143.543427, -3.287439), (-86.991486, 143.543457, -3.287961), -1.571),
+        ("mixamorig:RightHandIndex3", "mixamorig:RightHandIndex2", (-86.991486, 143.543457, -3.287961), (-89.763664, 143.543442, -3.28798), -1.5708),
+        ("mixamorig:RightHandIndex4", "mixamorig:RightHandIndex3", (-89.763664, 143.543442, -3.28798), (-92.535851, 143.543442, -3.288483), -1.569),
+        ("mixamorig:RightHandMiddle1", "mixamorig:RightHand", (-80.8657, 144.061249, -5.548513), (-84.565712, 144.061249, -5.544801), -1.5698),
+        ("mixamorig:RightHandMiddle2", "mixamorig:RightHandMiddle1", (-84.565712, 144.061249, -5.544801), (-87.515701, 144.061264, -5.546855), -1.5715),
+        ("mixamorig:RightHandMiddle3", "mixamorig:RightHandMiddle2", (-87.515701, 144.061264, -5.546855), (-90.462326, 144.061264, -5.547009), -1.5708),
+        ("mixamorig:RightHandMiddle4", "mixamorig:RightHandMiddle3", (-90.462326, 144.061264, -5.547009), (-93.408958, 144.061279, -5.548146), -1.5693),
+        ("mixamorig:RightHandRing1", "mixamorig:RightHand", (-80.43679, 144.018219, -7.413624), (-83.816063, 144.018219, -7.414678), -1.5711),
+        ("mixamorig:RightHandRing2", "mixamorig:RightHandRing1", (-83.816063, 144.018219, -7.414678), (-86.705757, 144.018234, -7.414299), -1.5707),
+        ("mixamorig:RightHandRing3", "mixamorig:RightHandRing2", (-86.705757, 144.018234, -7.414299), (-89.344566, 144.018234, -7.413358), -1.5704),
+        ("mixamorig:RightHandRing4", "mixamorig:RightHandRing3", (-89.344566, 144.018234, -7.413358), (-91.983368, 144.018234, -7.408198), -1.5685),
+        ("mixamorig:RightHandPinky1", "mixamorig:RightHand", (-79.409866, 143.574585, -9.354769), (-83.009872, 143.574554, -9.358516), -1.5718),
+        ("mixamorig:RightHandPinky2", "mixamorig:RightHandPinky1", (-83.009872, 143.574554, -9.358516), (-85.109848, 143.574539, -9.364256), -1.5735),
+        ("mixamorig:RightHandPinky3", "mixamorig:RightHandPinky2", (-85.109848, 143.574539, -9.364256), (-87.225624, 143.574509, -9.367936), -1.5725),
+        ("mixamorig:RightHandPinky4", "mixamorig:RightHandPinky3", (-87.225624, 143.574509, -9.367936), (-89.3414, 143.574493, -9.371443), -1.5693),
+        ("mixamorig:LeftShoulder", "mixamorig:Spine2", (4.570434, 144.585907, -3.316374), (15.162806, 144.06131, -5.548495), 1.7887),
+        ("mixamorig:LeftArm", "mixamorig:LeftShoulder", (15.162806, 144.06131, -5.548495), (43.004326, 144.061295, -5.548472), 1.5708),
+        ("mixamorig:LeftForeArm", "mixamorig:LeftArm", (43.004326, 144.061295, -5.548472), (71.333168, 144.061249, -5.548449), 1.5708),
+        ("mixamorig:LeftHand", "mixamorig:LeftForeArm", (71.33316, 144.061249, -5.548455), (79.561035, 144.061234, -5.548448), 1.5708),
+        ("mixamorig:LeftHandThumb1", "mixamorig:LeftHand", (73.799301, 142.485062, -2.86672), (77.017113, 140.613007, -0.950229), 0.7734),
+        ("mixamorig:LeftHandThumb2", "mixamorig:LeftHandThumb1", (77.017105, 140.613007, -0.950233), (79.673126, 139.084198, 0.564276), 0.8029),
+        ("mixamorig:LeftHandThumb3", "mixamorig:LeftHandThumb2", (79.673126, 139.084198, 0.564275), (81.694016, 137.930115, 1.679409), 0.8246),
+        ("mixamorig:LeftHandThumb4", "mixamorig:LeftHandThumb3", (81.694016, 137.93013, 1.679407), (83.602867, 136.779297, 2.979897), 0.9351),
+        ("mixamorig:LeftHandIndex1", "mixamorig:LeftHand", (80.442467, 143.543213, -3.288584), (84.142464, 143.543198, -3.288907), 1.5709),
+        ("mixamorig:LeftHandIndex2", "mixamorig:LeftHandIndex1", (84.142464, 143.543198, -3.288907), (86.99247, 143.543182, -3.288556), 1.5707),
+        ("mixamorig:LeftHandIndex3", "mixamorig:LeftHandIndex2", (86.99247, 143.543182, -3.288556), (89.767326, 143.543167, -3.288583), 1.5708),
+        ("mixamorig:LeftHandIndex4", "mixamorig:LeftHandIndex3", (89.767326, 143.543167, -3.288583), (92.542191, 143.543167, -3.288682), 1.5701),
+        ("mixamorig:LeftHandMiddle1", "mixamorig:LeftHand", (80.866562, 144.061279, -5.548411), (84.566559, 144.061279, -5.548642), 1.5709),
+        ("mixamorig:LeftHandMiddle2", "mixamorig:LeftHandMiddle1", (84.566559, 144.061279, -5.548642), (87.516556, 144.061264, -5.548701), 1.5708),
+        ("mixamorig:LeftHandMiddle3", "mixamorig:LeftHandMiddle2", (87.516556, 144.061264, -5.548701), (90.469421, 144.061264, -5.548638), 1.5708),
+        ("mixamorig:LeftHandMiddle4", "mixamorig:LeftHandMiddle3", (90.469421, 144.061264, -5.548638), (93.422279, 144.061264, -5.54841), 1.5687),
+        ("mixamorig:LeftHandRing1", "mixamorig:LeftHand", (80.437691, 144.018219, -7.413529), (83.5877, 144.018219, -7.413487), 1.5708),
+        ("mixamorig:LeftHandRing2", "mixamorig:LeftHandRing1", (83.5877, 144.018219, -7.413487), (86.537689, 144.018204, -7.413447), 1.5708),
+        ("mixamorig:LeftHandRing3", "mixamorig:LeftHandRing2", (86.537689, 144.018204, -7.413447), (89.182007, 144.018204, -7.413414), 1.5708),
+        ("mixamorig:LeftHandRing4", "mixamorig:LeftHandRing3", (89.182007, 144.018188, -7.413391), (91.826324, 144.018188, -7.413271), 1.5717),
+        ("mixamorig:LeftHandPinky1", "mixamorig:LeftHand", (79.410942, 143.574371, -9.354712), (83.010902, 143.574402, -9.339987), 1.5667),
+        ("mixamorig:LeftHandPinky2", "mixamorig:LeftHandPinky1", (83.010902, 143.574402, -9.339987), (85.110901, 143.574432, -9.332282), 1.5671),
+        ("mixamorig:LeftHandPinky3", "mixamorig:LeftHandPinky2", (85.110901, 143.574432, -9.332282), (87.236404, 143.574432, -9.324767), 1.5673),
+        ("mixamorig:LeftHandPinky4", "mixamorig:LeftHandPinky3", (87.236404, 143.574432, -9.324767), (89.361916, 143.574448, -9.31851), 1.5663),
+        ("mixamorig:RightUpLeg", "mixamorig:Hips", (-8.207794, 97.523209, -0.045244), (-8.207795, 53.15308, 0.300695), 3.1416),
+        ("mixamorig:RightLeg", "mixamorig:RightUpLeg", (-8.207795, 53.15308, 0.300695), (-8.207794, 8.729401, -2.742842), 3.1416),
+        ("mixamorig:RightFoot", "mixamorig:RightLeg", (-8.207794, 8.729401, -2.742842), (-8.207798, 0.000729, 7.967721), 3.1416),
+        ("mixamorig:RightToeBase", "mixamorig:RightFoot", (-8.207797, 0.000728, 7.967721), (-8.2078, 5.2e-05, 17.245842), 3.1416),
+        ("mixamorig:RightToe_End", "mixamorig:RightToeBase", (-8.207799, 5.2e-05, 17.245842), (-8.207802, -0.000624, 26.523964), -3.1184),
+        ("mixamorig:LeftUpLeg", "mixamorig:Hips", (8.207784, 97.523178, -0.04524), (8.207782, 53.153145, 0.301718), 3.1416),
+        ("mixamorig:LeftLeg", "mixamorig:LeftUpLeg", (8.207782, 53.153145, 0.301718), (8.207782, 8.729473, -2.742675), -3.1416),
+        ("mixamorig:LeftFoot", "mixamorig:LeftLeg", (8.207782, 8.729473, -2.742675), (8.207779, 0.000805, 7.967885), 3.1416),
+        ("mixamorig:LeftToeBase", "mixamorig:LeftFoot", (8.207779, 0.000805, 7.967887), (8.207776, 0.000128, 17.246023), 3.1416),
+        ("mixamorig:LeftToe_End", "mixamorig:LeftToeBase", (8.207776, 0.000129, 17.246023), (8.207773, -0.000548, 26.524158), 3.1179),
     ]
 
     def execute(self, context):
@@ -181,15 +180,15 @@ class MIXAMO_OT_NewMixamoSkeleton(Operator):
         armature_data.name = s.skeleton_name
         armature_data.display_type = 'OCTAHEDRAL'
 
-        # Bake rotation and scale into bone data so armature object is identity
-        mat = Matrix.Rotation(radians(90), 4, 'X') @ Matrix.Scale(s.skeleton_scale, 4)
-
+        # Keep bone data in original cm coordinates with proper armature scale,
+        # matching the structure of an imported Mixamo FBX.
+        armature.scale = (s.skeleton_scale,) * 3
         bone_map = {}
-        for name, parent_name, head, tail in self._BONE_DATA:
+        for name, parent_name, head, tail, roll in self._BONE_DATA:
             eb = armature_data.edit_bones.new(name)
-            eb.head = mat @ Vector(head)
-            eb.tail = mat @ Vector(tail)
-            eb.roll = 0
+            eb.head = Vector(head)
+            eb.tail = Vector(tail)
+            eb.roll = roll
             if parent_name:
                 eb.parent = bone_map[parent_name]
                 eb.use_connect = False
