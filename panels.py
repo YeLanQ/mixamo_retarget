@@ -103,7 +103,7 @@ class MIXAMO_PT_Retarget(MIXAMO_PT_Base, Panel):
 
 
 class MIXAMO_PT_Bake(MIXAMO_PT_Base, Panel):
-    bl_label = "Bake Animation"
+    bl_label = "Bake & Interpolate"
     bl_idname = "MIXAMO_PT_Bake"
     bl_order = 30
 
@@ -118,6 +118,30 @@ class MIXAMO_PT_Bake(MIXAMO_PT_Base, Panel):
         row.prop(s, "bake_end_frame", text="End")
         box.operator("mixamo_retarget.bake_retargeting",
                      text="Bake & Remove Constraints", icon='NLA_PUSHDOWN')
+
+        layout.separator()
+
+        box = layout.box()
+        box.label(text="Bone In-Betweening (补帧)", icon='KEYINGSET')
+        box.prop(s, "interp_step", text="Frame Step")
+        box.prop(s, "smoothing_passes", text="Smoothing Passes")
+        box.prop(s, "interp_use_mirror")
+
+        col = box.column(align=True)
+        op_all = col.operator("mixamo_retarget.interpolate_bones",
+                              text="Full Interpolation (补帧)", icon='IPO_BEZIER')
+        op_all.mode = "all"
+
+        row = col.row(align=True)
+        op_miss = row.operator("mixamo_retarget.interpolate_bones",
+                               text="Fill Missing", icon='KEYFRAME')
+        op_miss.mode = "missing"
+        op_gaps = row.operator("mixamo_retarget.interpolate_bones",
+                               text="Fill Gaps", icon='KEYFRAME_HLT')
+        op_gaps.mode = "gaps"
+        op_smooth = row.operator("mixamo_retarget.interpolate_bones",
+                                 text="Smooth", icon='SMOOTHCURVE')
+        op_smooth.mode = "smooth"
 
 
 class MIXAMO_PT_Presets(MIXAMO_PT_Base, Panel):

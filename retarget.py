@@ -762,6 +762,289 @@ def bake_retargeted_animation(
         return False
 
 
+# ============================================================================
+# Bone Animation Interpolation (补帧)
+# ============================================================================
+
+
+def get_bone_fcurves(action, bone_name):
+    """Get all F-curves for a specific bone.
+    Returns (location_fcurves[3], rotation_fcurves[4], scale_fcurves[3]).
+    Each entry is the FCurve or None.
+    """
+    loc = [None, None, None]
+    rot = [None, None, None, None]
+    scale = [None, None, None]
+
+    if not hasattr(action, 'fcurves'):
+        return loc, rot, scale
+
+    prefix = f'pose.bones["{bone_name}"].'
+    for fcu in action.fcurves:
+        if fcu.data_path == prefix + 'location':
+            loc[fcu.array_index] = fcu
+        elif fcu.data_path == prefix + 'rotation_quaternion':
+            rot[fcu.array_index] = fcu
+        elif fcu.data_path == prefix + 'scale':
+            scale[fcu.array_index] = fcu
+
+    return loc, rot, scale
+
+
+def bone_has_fcurves(action, bone_name):
+    """Check if a bone has any F-curves in the given action."""
+    if not action:
+        return False
+    loc, rot, scale = get_bone_fcurves(action, bone_name)
+    return any(fc is not None for fc in loc + rot + scale)
+
+
+def _mirror_bone_name(name):
+    """Try to find the mirror bone name (left <-> right)."""
+    import re
+    patterns = [
+        (re.compile(r"^(left|Left|LEFT)(.*)$"), lambda m: ("Right" if m.group(1)[0].isupper() else "right") + m.group(2)),
+        (re.compile(r"^(right|Right|RIGHT)(.*)$"), lambda m: ("Left" if m.group(1)[0].isupper() else "left") + m.group(2)),
+        (re.compile(r"^(l|L)_(.*)$"), lambda m: ("R_" if m.group(1).isupper() else "r_") + m.group(2)),
+        (re.compile(r"^(r|R)_(.*)$"), lambda m: ("L_" if m.group(1).isupper() else "l_") + m.group(2)),
+        (re.compile(r"(.*)(Left|left)(.*)$"), lambda m: m.group(1) + ("Right" if m.group(2)[0].isupper() else "right") + m.group(3)),
+        (re.compile(r"(.*)(Right|right)(.*)$"), lambda m: m.group(1) + ("Left" if m.group(2)[0].isupper() else "left") + m.group(3)),
+    ]
+    for pattern, repl in patterns:
+        m = pattern.match(name)
+        if m:
+            result = repl(m)
+            if result != name:
+                return result
+    return None
+
+
+def _ensure_action(armature_obj):
+    """Ensure the armature has animation data with an action."""
+    if armature_obj.animation_data is None:
+        armature_obj.animation_data_create()
+    if armature_obj.animation_data.action is None:
+        existing = next((a for a in bpy.data.actions if not a.users), None)
+        action = existing or bpy.data.actions.new(name=f"{armature_obj.name}_Action")
+        armature_obj.animation_data.action = action
+    return armature_obj.animation_data.action
+
+
+def _get_bone_keyframe_frames(action, bone_name):
+    """Get all frames that have keyframes for this bone across all channels."""
+    frames = set()
+    if not hasattr(action, 'fcurves'):
+        return []
+    for fcu in action.fcurves:
+        if f'pose.bones["{bone_name}"]' in fcu.data_path:
+            for kp in fcu.keyframe_points:
+                frames.add(int(kp.co.x))
+    return sorted(frames)
+
+
+def fill_missing_bone_animation(armature_obj, bone_name, frame_start, frame_end, step=1):
+    """Create minimal animation (identity local transform) for a bone with no F-curves.
+    This ensures the bone follows its parent naturally with keyframes at regular intervals.
+    Returns number of keyframes added.
+    """
+    action = _ensure_action(armature_obj)
+    bone = armature_obj.pose.bones[bone_name]
+
+    if bone_has_fcurves(action, bone_name):
+        return 0
+
+    keyframes_added = 0
+    for frame in range(frame_start, frame_end + 1, step):
+        bpy.context.scene.frame_set(frame)
+        bone.location = (0.0, 0.0, 0.0)
+        bone.rotation_quaternion = (1.0, 0.0, 0.0, 0.0)
+        bone.scale = (1.0, 1.0, 1.0)
+        bone.keyframe_insert(data_path='location', frame=frame, group=bone_name)
+        bone.keyframe_insert(data_path='rotation_quaternion', frame=frame, group=bone_name)
+        bone.keyframe_insert(data_path='scale', frame=frame, group=bone_name)
+        keyframes_added += 1
+
+    return keyframes_added
+
+
+def derive_from_mirror_bone(armature_obj, bone_name, frame_start, frame_end, step=1):
+    """Derive animation for a bone from its mirror counterpart (left <-> right).
+    Returns (keyframes_added, error_message_or_None).
+    """
+    mirror = _mirror_bone_name(bone_name)
+    if not mirror or mirror not in armature_obj.pose.bones:
+        return 0, "No mirror bone found"
+
+    action = _ensure_action(armature_obj)
+
+    if not bone_has_fcurves(action, mirror):
+        return 0, f"Mirror bone '{mirror}' has no F-curves"
+
+    keyframes_added = 0
+    for frame in range(frame_start, frame_end + 1, step):
+        bpy.context.scene.frame_set(frame)
+
+        mirror_bone = armature_obj.pose.bones[mirror]
+        bone = armature_obj.pose.bones[bone_name]
+
+        loc = mirror_bone.location.copy()
+        rot = mirror_bone.rotation_quaternion.copy()
+        scl = mirror_bone.scale.copy()
+
+        loc.x = -loc.x
+        rot.x = -rot.x
+        rot.w = -rot.w
+
+        bone.location = loc
+        bone.rotation_quaternion = rot
+        bone.scale = scl
+
+        bone.keyframe_insert(data_path='location', frame=frame, group=bone_name)
+        bone.keyframe_insert(data_path='rotation_quaternion', frame=frame, group=bone_name)
+        bone.keyframe_insert(data_path='scale', frame=frame, group=bone_name)
+        keyframes_added += 1
+
+    return keyframes_added, None
+
+
+def fill_keyframe_gaps(armature_obj, bone_name, frame_start, frame_end, step=1):
+    """Ensure every Nth frame has a keyframe by sampling current pose values.
+    Returns number of new keyframes added.
+    """
+    action = _ensure_action(armature_obj)
+    bone = armature_obj.pose.bones[bone_name]
+
+    if not bone_has_fcurves(action, bone_name):
+        return 0
+
+    existing_frames = _get_bone_keyframe_frames(action, bone_name)
+    keyframes_added = 0
+
+    for frame in range(frame_start, frame_end + 1, step):
+        if frame in existing_frames:
+            continue
+        bpy.context.scene.frame_set(frame)
+        bone.keyframe_insert(data_path='location', frame=frame, group=bone_name)
+        bone.keyframe_insert(data_path='rotation_quaternion', frame=frame, group=bone_name)
+        bone.keyframe_insert(data_path='scale', frame=frame, group=bone_name)
+        keyframes_added += 1
+
+    return keyframes_added
+
+
+def smooth_bone_fcurves(armature_obj, bone_name, passes=3):
+    """Smooth F-curves for a bone using moving average filter.
+    Each pass replaces each keyframe's value with the average of itself and its neighbors.
+    """
+    action = None
+    if armature_obj.animation_data:
+        action = armature_obj.animation_data.action
+    if not action:
+        return
+
+    data_paths = [('location', 3), ('rotation_quaternion', 4), ('scale', 3)]
+    prefix = f'pose.bones["{bone_name}"].'
+
+    for prop_name, dim in data_paths:
+        for idx in range(dim):
+            fcurve = None
+            for fc in action.fcurves:
+                if fc.data_path == prefix + prop_name and fc.array_index == idx:
+                    fcurve = fc
+                    break
+            if fcurve is None or len(fcurve.keyframe_points) < 3:
+                continue
+
+            for _ in range(passes):
+                points = [(kp.co.x, kp.co.y) for kp in fcurve.keyframe_points]
+                n = len(points)
+                for j in range(1, n - 1):
+                    smoothed = (points[j - 1][1] + points[j][1] + points[j + 1][1]) / 3.0
+                    fcurve.keyframe_points[j].co.y = smoothed
+                    fcurve.keyframe_points[j].handle_left.y = smoothed
+                    fcurve.keyframe_points[j].handle_right.y = smoothed
+                if n >= 2:
+                    smoothed_first = (points[0][1] + points[1][1]) / 2.0
+                    fcurve.keyframe_points[0].co.y = smoothed_first
+                    fcurve.keyframe_points[0].handle_left.y = smoothed_first
+                    fcurve.keyframe_points[0].handle_right.y = smoothed_first
+                    smoothed_last = (points[-2][1] + points[-1][1]) / 2.0
+                    fcurve.keyframe_points[-1].co.y = smoothed_last
+                    fcurve.keyframe_points[-1].handle_left.y = smoothed_last
+                    fcurve.keyframe_points[-1].handle_right.y = smoothed_last
+
+            fcurve.update()
+
+
+def interpolate_armature_animation(
+    armature_obj: bpy.types.Object,
+    frame_start: int,
+    frame_end: int,
+    fill_missing: bool = True,
+    fill_gaps: bool = True,
+    smooth: bool = True,
+    smoothing_passes: int = 3,
+    step: int = 1,
+    use_mirror: bool = True,
+) -> dict:
+    """Comprehensive bone animation in-betweening (补帧) for an armature.
+
+    - fill_missing: For bones without F-curves, derive from mirror or create identity keyframes
+    - fill_gaps:     Ensure keyframes exist at regular intervals
+    - smooth:        Apply moving-average smoothing to jerky F-curves
+
+    Returns dict of per-bone stats: {bone_name: {'keyframes_added': int, 'actions': [str]}}
+    """
+    if not armature_obj or armature_obj.type != 'ARMATURE':
+        return {}
+
+    import bpy
+    original_frame = bpy.context.scene.frame_current
+    bpy.context.view_layer.objects.active = armature_obj
+
+    stats = {}
+    for bone in armature_obj.pose.bones:
+        bone_name = bone.name
+        bone_stats = {'keyframes_added': 0, 'actions': []}
+
+        action = armature_obj.animation_data.action if armature_obj.animation_data else None
+        has_fcurves = bone_has_fcurves(action, bone_name) if action else False
+
+        if fill_missing and not has_fcurves:
+            mirrored = False
+            if use_mirror:
+                n, err = derive_from_mirror_bone(
+                    armature_obj, bone_name, frame_start, frame_end, step
+                )
+                if err is None and n > 0:
+                    bone_stats['keyframes_added'] += n
+                    bone_stats['actions'].append("derived from mirror")
+                    mirrored = True
+
+            if not mirrored:
+                n = fill_missing_bone_animation(
+                    armature_obj, bone_name, frame_start, frame_end, step
+                )
+                bone_stats['keyframes_added'] += n
+                bone_stats['actions'].append("missing filled")
+
+        if fill_gaps and has_fcurves:
+            n = fill_keyframe_gaps(
+                armature_obj, bone_name, frame_start, frame_end, step
+            )
+            bone_stats['keyframes_added'] += n
+            bone_stats['actions'].append("gaps filled")
+
+        if smooth and has_fcurves:
+            smooth_bone_fcurves(armature_obj, bone_name, smoothing_passes)
+            bone_stats['actions'].append("smoothed")
+
+        stats[bone_name] = bone_stats
+
+    bpy.context.scene.frame_set(original_frame)
+    return stats
+
+
 def save_preset(prefs, preset_name: str, bone_pairs: list[dict]) -> None:
     import json
     try:

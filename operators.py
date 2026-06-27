@@ -2,7 +2,7 @@ import bpy
 import os
 import json
 from bpy.types import Operator, Armature
-from bpy.props import StringProperty, BoolProperty, IntProperty
+from bpy.props import StringProperty, BoolProperty, IntProperty, EnumProperty
 from mathutils import Vector
 
 from . import retarget as rt
@@ -397,6 +397,74 @@ class MIXAMO_OT_RemoveSingleRetargeting(Operator):
         return {'FINISHED'}
 
 
+class MIXAMO_OT_InterpolateBones(Operator):
+    """Fill missing keyframes, fill frame gaps, and smooth jerky bone animations (补帧)"""
+    bl_idname = "mixamo_retarget.interpolate_bones"
+    bl_label = "Interpolate Bones"
+    bl_description = "补帧: Fill missing keyframes and smooth jerky bone animation based on overall motion"
+    bl_options = {"REGISTER", "UNDO"}
+
+    mode: EnumProperty(
+        name="Mode",
+        description="Interpolation mode",
+        items=[
+            ("all", "All (补帧)", "Fill missing + fill gaps + smooth"),
+            ("missing", "Fill Missing", "Create keyframes for bones without any animation"),
+            ("gaps", "Fill Gaps", "Fill in missing frames on existing F-curves"),
+            ("smooth", "Smooth Only", "Smooth jerky F-curves (moving average)"),
+        ],
+        default="all",
+    )
+
+    def execute(self, context):
+        s = context.scene.mixamo_retarget
+        arm = s.target_armature
+
+        if not arm:
+            self.report({'ERROR'}, "Set Target Armature first.")
+            return {'CANCELLED'}
+
+        bpy.ops.object.mode_set(mode='OBJECT')
+
+        fill_missing = self.mode in ("missing", "all")
+        fill_gaps = self.mode in ("gaps", "all")
+        smooth = self.mode in ("smooth", "all")
+
+        stats = rt.interpolate_armature_animation(
+            arm,
+            s.bake_start_frame,
+            s.bake_end_frame,
+            fill_missing=fill_missing,
+            fill_gaps=fill_gaps,
+            smooth=smooth,
+            smoothing_passes=s.smoothing_passes,
+            step=s.interp_step,
+            use_mirror=s.interp_use_mirror,
+        )
+
+        total_added = sum(v['keyframes_added'] for v in stats.values())
+        bones_affected = sum(
+            1 for v in stats.values()
+            if v['keyframes_added'] > 0 or v['actions']
+        )
+        bones_missing = sum(
+            1 for v in stats.values()
+            if any("missing" in a for a in v['actions'])
+        )
+        bones_mirrored = sum(
+            1 for v in stats.values()
+            if any("mirror" in a for a in v['actions'])
+        )
+        bones_smoothed = sum(
+            1 for v in stats.values()
+            if any("smoothed" in a for a in v['actions'])
+        )
+
+        details = f"({total_added} keyframes, {bones_missing} missing, {bones_mirrored} mirrored, {bones_smoothed} smoothed)"
+        self.report({'INFO'}, f"Interpolated {bones_affected} bones {details}")
+        return {'FINISHED'}
+
+
 class MIXAMO_OT_BakeRetargeting(Operator):
     """Bake the retargeted animation into keyframes and remove constraints"""
     bl_idname = "mixamo_retarget.bake_retargeting"
@@ -572,6 +640,7 @@ _classes = [
     MIXAMO_OT_ApplyRetargeting,
     MIXAMO_OT_RemoveRetargeting,
     MIXAMO_OT_RemoveSingleRetargeting,
+    MIXAMO_OT_InterpolateBones,
     MIXAMO_OT_BakeRetargeting,
     MIXAMO_OT_SavePreset,
     MIXAMO_OT_LoadPreset,

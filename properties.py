@@ -81,6 +81,28 @@ class MIXAMO_SceneSettings(PropertyGroup):
         default=True,
     )
 
+    interp_step: IntProperty(
+        name="Frame Step",
+        description="Create a keyframe every N frames during interpolation",
+        default=1,
+        min=1,
+        max=10,
+    )
+
+    smoothing_passes: IntProperty(
+        name="Smoothing Passes",
+        description="Number of moving-average smoothing passes to apply to jerky F-curves",
+        default=3,
+        min=0,
+        max=20,
+    )
+
+    interp_use_mirror: BoolProperty(
+        name="Mirror Bones",
+        description="For bones without animation, try to derive from their left/right mirror counterpart",
+        default=True,
+    )
+
     skeleton_scale: FloatProperty(
         name="Scale",
         description="Armature object scale (0.01 = cm→m, matching FBX import)",
