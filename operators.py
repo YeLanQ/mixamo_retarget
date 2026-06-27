@@ -430,6 +430,13 @@ class MIXAMO_OT_InterpolateBones(Operator):
         fill_gaps = self.mode in ("gaps", "all")
         smooth = self.mode in ("smooth", "all")
 
+        wm = context.window_manager
+        bones = list(arm.pose.bones)
+        wm.progress_begin(0, len(bones))
+
+        def _on_progress(done, total, bone_name):
+            wm.progress_update(done)
+
         stats = rt.interpolate_armature_animation(
             arm,
             s.bake_start_frame,
@@ -440,7 +447,10 @@ class MIXAMO_OT_InterpolateBones(Operator):
             smoothing_passes=s.smoothing_passes,
             step=s.interp_step,
             use_mirror=s.interp_use_mirror,
+            progress_callback=_on_progress,
         )
+
+        wm.progress_end()
 
         total_added = sum(v['keyframes_added'] for v in stats.values())
         bones_affected = sum(

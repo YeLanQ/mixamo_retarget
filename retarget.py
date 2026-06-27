@@ -986,12 +986,16 @@ def interpolate_armature_animation(
     smoothing_passes: int = 3,
     step: int = 1,
     use_mirror: bool = True,
+    progress_callback: callable = None,
 ) -> dict:
     """Comprehensive bone animation in-betweening (补帧) for an armature.
 
     - fill_missing: For bones without F-curves, derive from mirror or create identity keyframes
     - fill_gaps:     Ensure keyframes exist at regular intervals
     - smooth:        Apply moving-average smoothing to jerky F-curves
+
+    progress_callback(steps_done, total_steps, current_bone_name) is called
+    after each bone is processed.
 
     Returns dict of per-bone stats: {bone_name: {'keyframes_added': int, 'actions': [str]}}
     """
@@ -1002,8 +1006,10 @@ def interpolate_armature_animation(
     original_frame = bpy.context.scene.frame_current
     bpy.context.view_layer.objects.active = armature_obj
 
+    bones = list(armature_obj.pose.bones)
+    total = len(bones)
     stats = {}
-    for bone in armature_obj.pose.bones:
+    for i, bone in enumerate(bones):
         bone_name = bone.name
         bone_stats = {'keyframes_added': 0, 'actions': []}
 
@@ -1040,6 +1046,9 @@ def interpolate_armature_animation(
             bone_stats['actions'].append("smoothed")
 
         stats[bone_name] = bone_stats
+
+        if progress_callback:
+            progress_callback(i + 1, total, bone_name)
 
     bpy.context.scene.frame_set(original_frame)
     return stats
