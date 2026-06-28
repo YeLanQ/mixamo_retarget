@@ -61,4 +61,4 @@ Blender 插件，用于在 Mixamo 骨骼角色之间重定向 Mixamo FBX 动画�
 
 ## 许可证
 
-GPL-2.0-or-later — 详见 `LICENSE`。
+GPL-3.0-or-later — 详见 `LICENSE`。

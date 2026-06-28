@@ -61,4 +61,4 @@ See `docs/bone-editor.md` for details.
 
 ## License
 
-GPL-2.0-or-later — see `LICENSE`.
+GPL-3.0-or-later — see `LICENSE`.
