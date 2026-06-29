@@ -16,7 +16,7 @@ _last_mapping_index = -1
 
 
 def _select_bone_in_viewport(bone_name):
-    """Select a bone in the active armature (direct data access, no bpy.ops)."""
+    """Select a bone in the active armature (Blender 5.1+ API)."""
     context = bpy.context
     arm = context.active_object
     if not arm or arm.type != 'ARMATURE' or context.mode != 'POSE':
@@ -24,9 +24,7 @@ def _select_bone_in_viewport(bone_name):
     pbone = arm.pose.bones.get(bone_name)
     if not pbone:
         return
-    for b in arm.data.bones:
-        b.select = False
-    pbone.bone.select = True
+    arm.data.bone_selection = {pbone.name}
     arm.data.bones.active = pbone.bone
 
 

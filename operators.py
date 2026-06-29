@@ -400,12 +400,11 @@ class MIXAMO_OT_SelectMappingBone(Operator):
             return {'CANCELLED'}
         if context.mode != 'POSE':
             return {'CANCELLED'}
-        bone = arm.pose.bones.get(self.bone_name)
-        if not bone:
+        pbone = arm.pose.bones.get(self.bone_name)
+        if not pbone:
             return {'CANCELLED'}
-        bpy.ops.pose.select_all(action='DESELECT')
-        bone.bone.select = True
-        arm.data.bones.active = bone.bone
+        arm.data.bone_selection = {pbone.name}
+        arm.data.bones.active = pbone.bone
         return {'FINISHED'}
 
 
