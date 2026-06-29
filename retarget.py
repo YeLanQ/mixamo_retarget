@@ -91,7 +91,7 @@ HUMAN_BONE_NAMES = [
 ]
 
 # Subset of finger/hand bone names (excluding palm/wrist)
-FINGER_HUMAN_BONES = frozenset(HUMAN_BONE_NAMES[81:])
+FINGER_HUMAN_BONES = frozenset(HUMAN_BONE_NAMES[25:])
 
 REQUIRED_BONE_NAMES = frozenset([
     "hips", "spine", "head",
