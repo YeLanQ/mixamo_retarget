@@ -160,9 +160,7 @@ class MIXAMO_PT_Retarget(MIXAMO_PT_Base, Panel):
         row.operator("mixamo_retarget.select_target", text="", icon='EYEDROPPER')
 
         box.prop(s, "retarget_root_bone", text="Root Bone")
-        row = box.row(align=True)
-        row.prop(s, "auto_align_rest_pose", text="Align Rest Pose")
-        row.prop(s, "ground_clamp", text="Ground Clamp")
+        box.prop(s, "auto_align_rest_pose", text="Align Rest Pose")
 
         layout.separator()
 

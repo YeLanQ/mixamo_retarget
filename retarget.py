@@ -649,7 +649,6 @@ def apply_retargeting_constraints(
     bone_pairs: list,
     root_bone: str = "",
     align_rest: bool = True,
-    ground_clamp: bool = False,
 ) -> tuple[int, list[str]]:
     source_arm.hide_viewport = False
     target_arm.hide_viewport = False
@@ -703,11 +702,6 @@ def apply_retargeting_constraints(
             _add_copy_rotation(tgt_pbone, source_arm, src_name, is_root)
 
         applied += 1
-
-    if ground_clamp:
-        n = add_ground_clamp_constraints(target_arm)
-        if n:
-            warnings.append(f"Ground clamp applied to {n} foot bone(s)")
 
     return applied, warnings
 
@@ -839,56 +833,6 @@ def remove_retargeting_constraints_for_bone(target_arm: bpy.types.Object,
                 pbone.constraints.remove(c)
                 removed += 1
     return removed
-
-
-FOOT_KEYWORDS = frozenset(["foot", "toe", "ankle"])
-
-
-def _world_up_axis(armature: bpy.types.Object) -> tuple[int, str]:
-    """Detect which world-space axis is 'up' for this armature.
-    The skeleton convention is Y-up internally; transform to world space
-    via the armature object's matrix to get the actual up axis.
-    Returns (index, name) e.g. (2, 'z') for Blender's default Z-up.
-    """
-    mat = armature.matrix_world.to_3x3()
-    up = mat @ Vector((0, 1, 0))
-    idx = max(range(3), key=lambda i: abs(up[i]))
-    return idx, 'xyz'[idx]
-
-
-def add_ground_clamp_constraints(target_arm: bpy.types.Object) -> int:
-    """Add Limit Location constraints to foot/toe bones.
-    Each bone's rest-pose Y in world space is used as the minimum Y,
-    preventing ground penetration from root position drift.
-    """
-    up_idx, up_axis = _world_up_axis(target_arm)
-
-    added = 0
-    for pbone in target_arm.pose.bones:
-        if not any(k in pbone.name.lower() for k in FOOT_KEYWORDS):
-            continue
-        has_retarget = any(
-            c.name.startswith(CONSTRAINT_PREFIX) and c.name != CONSTRAINT_PREFIX + "GroundClamp"
-            for c in pbone.constraints
-        )
-        if not has_retarget:
-            continue
-
-        rest_world = target_arm.matrix_world @ pbone.bone.matrix_local
-        rest_up = rest_world.translation[up_idx]
-
-        for c in list(pbone.constraints):
-            if c.name == CONSTRAINT_PREFIX + "GroundClamp":
-                pbone.constraints.remove(c)
-
-        lc = pbone.constraints.new("LIMIT_LOCATION")
-        lc.name = CONSTRAINT_PREFIX + "GroundClamp"
-        setattr(lc, f'use_min_{up_axis}', True)
-        setattr(lc, f'min_{up_axis}', rest_up)
-        lc.owner_space = 'WORLD'
-        lc.use_transform_limit = False
-        added += 1
-    return added
 
 
 def bake_retargeted_animation(

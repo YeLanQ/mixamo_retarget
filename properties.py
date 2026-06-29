@@ -121,12 +121,6 @@ class MIXAMO_SceneSettings(PropertyGroup):
         default=True,
     )
 
-    ground_clamp: BoolProperty(
-        name="Ground Clamp",
-        description="Force foot and toe bones to stay at or above their rest-pose Y height, preventing ground penetration from root offset",
-        default=False,
-    )
-
     interp_step: IntProperty(
         name="Frame Step",
         description="Create a keyframe every N frames during interpolation",

@@ -362,7 +362,6 @@ class MIXAMO_OT_ApplyRetargeting(Operator):
         n, warnings = rt.apply_retargeting_constraints(
             s.source_armature, s.target_armature, pairs,
             s.retarget_root_bone, s.auto_align_rest_pose,
-            s.ground_clamp,
         )
 
         for w in warnings:
