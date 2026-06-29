@@ -158,6 +158,16 @@ class MIXAMO_SceneSettings(PropertyGroup):
         default="Mixamo_Armature",
     )
 
+    skeleton_orientation: EnumProperty(
+        name="Orientation",
+        description="Rotation to apply to the new armature",
+        items=[
+            ("X90", "Mixamo (X+90°)", "Rotate 90° around X axis (Y-up → Z-up)"),
+            ("NONE", "None", "No rotation"),
+        ],
+        default="X90",
+    )
+
 class MIXAMO_AddonPreferences(AddonPreferences):
     bl_idname = __package__
 

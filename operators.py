@@ -1,6 +1,7 @@
 import bpy
 import os
 import json
+import math
 from bpy.types import Operator, Armature
 from bpy.props import StringProperty, BoolProperty, IntProperty, EnumProperty
 from mathutils import Vector
@@ -195,6 +196,10 @@ class MIXAMO_OT_NewMixamoSkeleton(Operator):
             bone_map[name] = eb
 
         bpy.ops.object.mode_set(mode='OBJECT')
+
+        if s.skeleton_orientation == "X90":
+            armature.rotation_euler = (math.radians(90), 0.0, 0.0)
+
         self.report({'INFO'},
             f"Created '{armature.name}' ({len(armature_data.bones)} bones)")
         return {"FINISHED"}
