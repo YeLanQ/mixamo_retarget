@@ -12,6 +12,34 @@ action.layers[0].strips[0].channelbag(slot).fcurves
 
 但不需要手动遍历层级——用 `action.fcurve_ensure_for_datablock(ob, path, index=)` 一行搞定。
 
+## Q: 各重定向模式有什么区别？
+
+| 模式 | 约束 | 位置处理 | 旋转处理 |
+|------|------|---------|---------|
+| `COPY_ROTATION` | COPY_ROTATION + COPY_LOCATION（根部） | 根部：直接复制源世界位置；非根部：不处理 | WORLD→WORLD |
+| `COPY_TRANSFORMS` | COPY_ROTATION + TRANSFORM（根部） | 根部：TRANSFORM 映射（休息姿势偏移）；非根部：不处理 | WORLD→WORLD |
+| `CHILD_OF` | CHILD_OF（位置+旋转） | 源骨骼成为虚拟父级（带逆矩阵抵消休息差异） | 从源骨骼继承 |
+| `CHILD_OF_ROTATION` | CHILD_OF（仅旋转） | 不处理（位置由目标骨架层级决定） | 从源骨骼继承，逆矩阵抵消休息差异 |
+
+## Q: Hips 的 COPY_TRANSFORMS 为什么会改变播放原点？
+
+TRANSFORM 约束使用公式 `目标位置 = 目标休息姿势 + (源动画位置 - 源休息姿势)`。当源动画第 0 帧的 Hips 位置不等于休息姿势时，目标在第 0 帧也会偏离休息姿势；如果源和目标骨架的世界空间位置不同，也会产生偏移。
+
+这是**约束创建时记录的偏移基准**决定的——如果需要在特定帧保持目标静止，请在目标处于期望位置的那一帧创建约束。
+
+## Q: 为什么手指骨骼蜷缩/粘在一起？
+
+手指骨骼在不同骨架之间通常有**完全不同的休息姿势方向**（例如 Mixamo 的手指平伸 vs 其他骨架的微曲）。
+
+WORLD→WORLD COPY_ROTATION 无法补偿休息姿势差异。手指应使用 `CHILD_OF_ROTATION` 模式，该模式通过自动逆矩阵抵消源/目标之间的休息姿势差异，仅复制相对旋转。
+
+## Q: 如何让手指正确重定向？
+
+1. 确保源和目标的手指骨骼已正确映射
+2. 在映射表中将所有手指骨骼的模式设为 `CHILD_OF_ROTATION`
+3. 点击 Apply Constraints
+4. `CHILD_OF_ROTATION` 使用 `CHILD_OF` 约束（仅旋转），自动计算 `inverse_matrix` 抵消休息姿势偏移
+
 ## Q: fcurve_ensure_for_datablock 和原来的 fcurves 有什么不同？
 
 - `action.furves` 是**只读迭代**，找不到就返回空

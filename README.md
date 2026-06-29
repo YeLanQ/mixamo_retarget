@@ -56,6 +56,22 @@ See `docs/bone-editor.md` for details.
 - Use the **`→`** button to fill the source/target bone name from the currently selected bone in the viewport
 - Bone mapping rows automatically highlight when you select the corresponding bone in 3D viewport (Pose Mode)
 
+### Retarget Modes
+
+Each bone pair can use one of four retarget modes, selected in the **Mode** column:
+
+| Mode | Constraint | Best for |
+|------|-----------|----------|
+| `COPY_ROTATION` | WORLD→WORLD COPY_ROTATION + COPY_LOCATION (root) | Most body bones. Root also receives direct world-space location copy. |
+| `COPY_TRANSFORMS` | WORLD→WORLD COPY_ROTATION + TRANSFORM location with rest-pose offset | Hips (default). Maps source world position to target via rest-pose offset — target stays at rest when source is at rest. |
+| `CHILD_OF` | CHILD_OF (location + rotation) with auto inverse matrix | Bones needing parent-space offset compensation. |
+| `CHILD_OF_ROTATION` | CHILD_OF (rotation only) with auto inverse matrix | Finger bones (use with CHILD_OF_ROTATION mode). Rest-pose differences are cancelled by the inverse matrix. |
+
+The default mode is set automatically based on the human bone type:
+- **Hips** → `COPY_TRANSFORMS` (root motion + rest-pose offset)
+- **Fingers** → `CHILD_OF_ROTATION` (compensates for different rest-pose orientations)
+- **All others** → `COPY_ROTATION`
+
 ## Documentation
 
 - `docs/bone-editor.md` — Bone Editor technical reference

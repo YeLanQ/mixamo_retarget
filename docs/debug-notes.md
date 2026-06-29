@@ -1,71 +1,101 @@
-# Current Debug Status — F-curves Not Found
+# Retargeting Debug Notes
 
-## Problem
+## Constraint Pipeline
 
-After baking animation (via the new `fcurve_ensure_for_datablock`-based bake), all Interpolate operations (Smooth, Predict, Gaps) report `0 kf, pred 0, smooth 0`, meaning no bones are found to have F-curves.
-
-## Investigation Steps
-
-### Step 1 — Confirm fcurve_ensure_for_datablock works
-
-Add right after the `fcurve_ensure_for_datablock` call in `_ensure_fcurve()`:
-
-```python
-print(f"[ENSURE] fcu={fcu} kf_count={len(fcu.keyframe_points) if fcu else -1}")
+```
+apply_retargeting_constraints()
+  ├─ For each bone pair:
+  │   ├─ Remove existing MIXAMO_RETARGET_* constraints
+  │   ├─ Determine is_root (auto or user-specified root bone)
+  │   └─ Create constraints based on mode:
+  │       ├─ COPY_ROTATION  → COPY_ROTATION (WORLD→WORLD) + optional COPY_LOCATION
+  │       ├─ COPY_TRANSFORMS → COPY_ROTATION (WORLD→WORLD) + TRANSFORM location (root)
+  │       ├─ CHILD_OF        → CHILD_OF (location + rotation)
+  │       └─ CHILD_OF_ROTATION → CHILD_OF (rotation only)
+  └─ Return (applied_count, warnings)
 ```
 
-### Step 2 — Confirm bake created animation data
+## Constraint Names
 
-In `bake_retargeted_animation`, after the loop, add:
+All constraints use prefix `MIXAMO_RETARGET_`:
 
-```python
-action = target_arm.animation_data.action if target_arm.animation_data else None
-print(f"[BAKE] anim_data={target_arm.animation_data is not None}")
-print(f"[BAKE] action={action}")
-if action:
-    print(f"[BAKE] action.name={action.name} is_empty={action.is_empty}")
-    print(f"[BAKE] layers={action.layers_count} slots={action.slots_count}")
-```
+| Name | Type | Created by |
+|------|------|-----------|
+| `MIXAMO_RETARGET_Location` | COPY_LOCATION or TRANSFORM | COPY_ROTATION (root) or COPY_TRANSFORMS (root) |
+| `MIXAMO_RETARGET_Rotation` | COPY_ROTATION | All modes |
+| `MIXAMO_RETARGET_ChildOf` | CHILD_OF | CHILD_OF mode |
+| `MIXAMO_RETARGET_ChildOfRotation` | CHILD_OF (rotation only) | CHILD_OF_ROTATION mode |
 
-### Step 3 — Check bone data_path
-
-In `get_bone_fcurves`, before the try block, add:
+## is_root Detection
 
 ```python
-print(f"[GETFCU] bone={bone_name} path={prefix + 'location'} action={action.name if action else 'NONE'}")
+if root_bone:   # user-specified via UI field
+    is_root = (tgt_name == root_bone)
+else:
+    src_name_lower = src_name.lower()
+    is_root = any(k in src_name_lower for k in ("hips", "pelvis", "root"))
 ```
 
-### Step 4 — List all actions in scene
+- Hips auto-detected from source bone name containing "hips", "pelvis", or "root"
+- User can override by setting a custom root bone name in the UI
+- Only root bones receive location tracking (COPY_LOCATION or TRANSFORM)
 
-In `interpolate_armature_animation`, after obtaining action, add:
+## Root Location: TRANSFORM Constraint
 
-```python
-print(f"[INTERP] actions in scene:")
-for a in bpy.data.actions:
-    print(f"  name={a.name} users={a.users} is_empty={a.is_empty}")
+Used by `COPY_TRANSFORMS` mode for the root bone:
+
+```
+from_min = src_rest_world.translation
+from_max = src_rest_world.translation + (1, 1, 1)
+to_min   = tgt_rest_world.translation
+to_max   = tgt_rest_world.translation + (1, 1, 1)
 ```
 
-## Possible Outcomes
+Result: `target_pos = tgt_rest + (source_pos - src_rest)`
 
-| Output | Meaning | Next Step |
-|---|---|---|
-| `fcu is not None, kf_count > 0` but `has_fcurves=False` | `keyframe_points` truthiness wrong | Change check to `len(fcu.keyframe_points) > 0` |
-| `fcu is None` | `fcurve_ensure_for_datablock` not available | Check Blender version |
-| `fcu is not None, kf_count = 0` | Bake loop didn't insert keyframes | Check `keyframe_points.insert()` return |
-| `anim_data=False` or `action=None` | Bake didn't set action | Check `animation_data_create()` call |
-| `action is not None, is_empty=True` | Bake wrote somewhere unexpected | Search NLA tracks, other actions |
+This keeps the target at its rest position when the source is at rest, and tracks source motion with the same offset.
 
-## Environment
+## Hips Location Pitfalls
 
-- Blender 5.1 (specific build unknown)
-- Action type: `is_action_legacy=True`, `is_action_layered=True`
-- `action.fcurve_ensure_for_datablock` exists but was called with str initially
-- Windows 10
+| Issue | Cause | Effect |
+|-------|-------|--------|
+| Target Hips off in XZ | Source frame 0 ≠ source rest pose | Frame 0 target off by (source_0 - source_rest) |
+| Target Hips off in Z | Different world transforms between skeletons | Offset direction includes bone rotation |
+| Target Hips floating | Source Hips elevated at frame 0 | Entire character shifted up |
 
-## Known Safe Assumptions
+## Retarget Mode Summary
 
-- `action.fcurve_ensure_for_datablock(ob, path, index=, group_name=)` exists and accepts `bpy.types.Object` as datablock
-- `FCurve.keyframe_points.insert(frame, value)` returns `Keyframe`
-- `fcurve.update()` recalculates handles
-- `bone.keyframe_insert(data_path, frame=, group=)` works in 5.1
-- `len(fcurve.keyframe_points)` works on empty collections
+| Mode | Root Location | Root Rotation | Non-root Location | Non-root Rotation |
+|------|--------------|--------------|-------------------|-------------------|
+| COPY_ROTATION | COPY_LOCATION (direct) | WORLD→WORLD | — | WORLD→WORLD |
+| COPY_TRANSFORMS | TRANSFORM (offset) | WORLD→WORLD | — | WORLD→WORLD |
+| CHILD_OF | CHILD_OF | CHILD_OF | CHILD_OF | CHILD_OF |
+| CHILD_OF_ROTATION | — | CHILD_OF (rot) | — | CHILD_OF (rot) |
+
+## Human Bone Hierarchy (HUMAN_BONE_NAMES)
+
+```
+hips → spine → chest → upperChest → neck → head
+                                    → leftEye / rightEye / jaw
+         leftUpperLeg → leftLowerLeg → leftFoot → leftToes
+         rightUpperLeg → rightLowerLeg → rightFoot → rightToes
+         leftShoulder → leftUpperArm → leftLowerArm → leftHand
+                     → finger bones (leftThumb/Index/Middle/Ring/Little × 3)
+         rightShoulder → rightUpperArm → rightLowerArm → rightHand
+                      → finger bones (rightThumb/Index/Middle/Ring/Little × 3)
+```
+
+FINGER_HUMAN_BONES = `HUMAN_BONE_NAMES[25:]` (30 finger bones)
+
+Required bones (minimum for detection): hips, spine, head, both upper/lower legs, feet, both upper/lower arms, hands.
+
+## Detection Passes
+
+```
+detect_skeleton()
+  Pass 1: Named conventions (Mixamo, VRM, Standard)
+  Pass 2: Normalized name comparison
+  Pass 3: Position-based heuristic (_match_by_position)
+```
+
+Finger bones are detected by naming convention only (Pass 1 or 2). Position-based detection does not identify individual finger bones.

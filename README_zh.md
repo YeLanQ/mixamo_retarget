@@ -56,6 +56,23 @@ Blender 插件，用于在 Mixamo 骨骼角色之间重定向 Mixamo FBX 动画�
 - 在视口（姿态模式）中选中骨骼后，点击 `→` 按钮自动填入源/目标骨骼名
 - 在 3D 视口中选中骨骼时，对应的映射行会自动高亮（单向同步）
 
+### 重定向模式
+
+每对骨骼映射可选择 4 种重定向模式，在映射表的 **模式** 列中切换：
+
+| 模式 | 约束类型 | 适用场景 |
+|------|---------|---------|
+| `COPY_ROTATION` | WORLD→WORLD COPY_ROTATION + COPY_LOCATION（根部） | 大部分身体骨骼。根部骨骼会直接复制源的世界空间位置。 |
+| `COPY_TRANSFORMS` | WORLD→WORLD COPY_ROTATION + TRANSFORM 位置偏移 | **Hips（默认）**。通过休息姿势偏移将源位置映射到目标——源在休息姿势时目标也在休息姿势。 |
+| `CHILD_OF` | CHILD_OF（位置+旋转）带自动逆矩阵 | 需要补偿父级空间偏移的骨骼。 |
+| `CHILD_OF_ROTATION` | CHILD_OF（仅旋转）带自动逆矩阵 | **手指骨骼**。逆矩阵自动抵消不同骨架的休息姿势差异。 |
+
+默认模式根据人体骨骼类型自动设置：
+
+- **Hips** → `COPY_TRANSFORMS`（根运动 + 休息姿势偏移）
+- **手指** → `CHILD_OF_ROTATION`（补偿不同休息姿势方向差异）
+- **其他** → `COPY_ROTATION`
+
 ## 技术文档
 
 - `docs/bone-editor.md` — 骨骼编辑器详细说明
