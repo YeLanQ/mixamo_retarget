@@ -27,7 +27,8 @@ class MIXAMO_BoneMappingItem(PropertyGroup):
         description="How this bone pair is driven",
         items=[
             ("COPY_ROTATION", "Copy Rotation", "Copy rotation in world space; root also gets Copy Location"),
-            ("COPY_TRANSFORMS", "Copy Transforms", "Copy loc + rot + scale in local space"),
+            ("COPY_TRANSFORMS", "Copy Transforms", "World-space rotation; root also gets relative location (no flying from rest-pose mismatch)"),
+            ("LOCAL_ROTATION", "Local Rotation", "Copy rotation in local space (for fingers — no flying when joint pivots differ)"),
             ("CHILD_OF", "Child Of", "Child Of constraint with auto inverse matrix"),
             ("CHILD_OF_ROTATION", "Child Of (Rotation)", "Child Of with rotation only"),
         ],

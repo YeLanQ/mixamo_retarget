@@ -481,14 +481,15 @@ def detect_skeleton(
 
 def _default_mode_for_human_bone(human_bone_name: str) -> str:
     """Determine the retarget mode for a human bone.
-    Hips uses COPY_TRANSFORMS (position + rotation for root motion).
-    Finger bones use CHILD_OF to preserve joint positions.
+    Hips uses COPY_TRANSFORMS (world-space loc + rot + scale for root motion).
+    Finger bones use LOCAL_ROTATION (local-space COPY_ROTATION,
+    not CHILD_OF — avoids flying when source/target joint pivots differ).
     All other bones use COPY_ROTATION.
     """
     if human_bone_name == "hips":
         return "COPY_TRANSFORMS"
     if human_bone_name in FINGER_HUMAN_BONES:
-        return "CHILD_OF"
+        return "LOCAL_ROTATION"
     return "COPY_ROTATION"
 
 
@@ -580,14 +581,15 @@ MIXAMO_BONE_HINTS = [
 
 def _default_mode_for_hint(hint_name: str) -> str:
     """Determine retarget mode from a MIXAMO_BONE_HINTS name.
-    Hips → COPY_TRANSFORMS.  Finger bones (LeftHand*/RightHand* excluding hand itself) → CHILD_OF.
+    Hips → COPY_TRANSFORMS (world-space loc + rot + scale).
+    Finger bones (LeftHand*/RightHand* excluding hand itself) → LOCAL_ROTATION.
     Others → COPY_ROTATION.
     """
     if hint_name == "Hips":
         return "COPY_TRANSFORMS"
     for prefix in ("LeftHand", "RightHand"):
         if hint_name.startswith(prefix) and hint_name != prefix:
-            return "CHILD_OF"
+            return "LOCAL_ROTATION"
     return "COPY_ROTATION"
 
 
@@ -688,7 +690,9 @@ def apply_retargeting_constraints(
         if mode == "COPY_ROTATION":
             _add_copy_rotation(tgt_pbone, source_arm, src_name, is_root)
         elif mode == "COPY_TRANSFORMS":
-            _add_copy_transforms(tgt_pbone, source_arm, src_name)
+            _add_copy_transforms(tgt_pbone, source_arm, target_arm, src_name, is_root)
+        elif mode == "LOCAL_ROTATION":
+            _add_copy_rotation(tgt_pbone, source_arm, src_name, is_root, local_space=True)
         elif mode == "CHILD_OF":
             _add_child_of(tgt_pbone, source_arm, target_arm, src_name, is_root)
         elif mode == "CHILD_OF_ROTATION":
@@ -702,7 +706,9 @@ def apply_retargeting_constraints(
     return applied, warnings
 
 
-def _add_copy_rotation(pbone, source_arm, src_name: str, is_root: bool = False) -> None:
+def _add_copy_rotation(pbone, source_arm, src_name: str,
+                       is_root: bool = False,
+                       local_space: bool = False) -> None:
     if is_root:
         loc = pbone.constraints.new("COPY_LOCATION")
         loc.name = CONSTRAINT_PREFIX + "Location"
@@ -715,18 +721,55 @@ def _add_copy_rotation(pbone, source_arm, src_name: str, is_root: bool = False) 
     rot.target = source_arm
     rot.subtarget = src_name
     rot.mix_mode = 'REPLACE'
+    if local_space:
+        rot.owner_space = 'LOCAL'
+        rot.target_space = 'LOCAL'
+    else:
+        rot.owner_space = 'WORLD'
+        rot.target_space = 'WORLD'
+
+
+def _add_copy_transforms(pbone, source_arm, target_arm, src_name: str, is_root: bool = False) -> None:
+    # WORLD-space COPY_ROTATION + rest-pose-offset COPY_LOCATION for root.
+    #
+    # Why not COPY_TRANSFORMS (LOCAL)?
+    #   LOCAL copies relative to parent rest pose. Different rest poses produce
+    #   wildly different world transforms → bones "fly away".
+    #
+    # Why not CHILD_OF?
+    #   CHILD_OF makes the source bone the virtual parent, overriding the
+    #   target's real hierarchy. The target detaches from its own parent chain.
+    #
+    # WORLD rotation: absolute, immune to rest-pose differences.
+    #
+    # For root: COPY_LOCATION with use_offset=True preserves the initial
+    #   world offset between source and target. To compute this offset
+    #   correctly, pbone is temporarily set to its edit-mode (rest) pose
+    #   so the offset is always rest-pose relative, never affected by
+    #   existing baked keyframes on the target armature.
+    if is_root:
+        restore_frame = bpy.context.scene.frame_current
+        saved_matrix = pbone.matrix.copy()
+        bpy.context.scene.frame_set(0)
+        pbone.matrix = pbone.bone.matrix_local
+        bpy.context.view_layer.update()
+        try:
+            loc = pbone.constraints.new("COPY_LOCATION")
+            loc.name = CONSTRAINT_PREFIX + "Location"
+            loc.target = source_arm
+            loc.subtarget = src_name
+            loc.use_offset = True
+        finally:
+            pbone.matrix = saved_matrix
+            bpy.context.scene.frame_set(restore_frame)
+
+    rot = pbone.constraints.new("COPY_ROTATION")
+    rot.name = CONSTRAINT_PREFIX + "Rotation"
+    rot.target = source_arm
+    rot.subtarget = src_name
+    rot.mix_mode = 'REPLACE'
     rot.owner_space = 'WORLD'
     rot.target_space = 'WORLD'
-
-
-def _add_copy_transforms(pbone, source_arm, src_name: str) -> None:
-    ct = pbone.constraints.new("COPY_TRANSFORMS")
-    ct.name = CONSTRAINT_PREFIX + "CopyTransforms"
-    ct.target = source_arm
-    ct.subtarget = src_name
-    ct.mix_mode = 'REPLACE'
-    ct.owner_space = 'LOCAL'
-    ct.target_space = 'LOCAL'
 
 
 def _add_child_of(pbone, source_arm, target_arm, src_name: str,
@@ -758,7 +801,7 @@ def _add_child_of(pbone, source_arm, target_arm, src_name: str,
     src_bone = source_arm.data.bones.get(src_name)
     if src_bone:
         src_rest_world = source_arm.matrix_world @ src_bone.matrix_local
-        tgt_current_world = target_arm.matrix_world @ pbone.matrix
+        tgt_current_world = target_arm.matrix_world @ pbone.bone.matrix_local
         co.inverse_matrix = src_rest_world.inverted() @ tgt_current_world
     else:
         co.inverse_matrix = mathutils.Matrix.Identity(4)
