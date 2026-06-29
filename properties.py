@@ -23,14 +23,14 @@ class MIXAMO_BoneMappingItem(PropertyGroup):
         default=True,
     )
     retarget_mode: EnumProperty(
-        name="Mode",
-        description="How this bone pair is driven",
+        name="模式",
+        description="控制此骨骼对的重定向方式",
         items=[
-            ("COPY_ROTATION", "Copy Rotation", "Copy rotation in world space; root also gets Copy Location"),
-            ("COPY_TRANSFORMS", "Copy Transforms", "World-space rotation; root also gets relative location (no flying from rest-pose mismatch)"),
-            ("LOCAL_ROTATION", "Local Rotation", "Copy rotation in local space (for fingers — no flying when joint pivots differ)"),
-            ("CHILD_OF", "Child Of", "Child Of constraint with auto inverse matrix"),
-            ("CHILD_OF_ROTATION", "Child Of (Rotation)", "Child Of with rotation only"),
+            ("COPY_ROTATION", "复制旋转", "Copy rotation in world space; root also gets Copy Location"),
+            ("COPY_TRANSFORMS", "复制变换", "World-space rotation; root also gets relative location (no flying from rest-pose mismatch)"),
+            ("LOCAL_ROTATION", "局部旋转", "Copy rotation in local space (for fingers — no flying when joint pivots differ)"),
+            ("CHILD_OF", "子级", "Child Of constraint with auto inverse matrix"),
+            ("CHILD_OF_ROTATION", "子级(仅旋转)", "Child Of with rotation only"),
         ],
         default="COPY_ROTATION",
     )
