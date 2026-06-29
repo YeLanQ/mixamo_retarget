@@ -742,26 +742,32 @@ def _add_copy_transforms(pbone, source_arm, target_arm, src_name: str, is_root: 
     #
     # WORLD rotation: absolute, immune to rest-pose differences.
     #
-    # For root: COPY_LOCATION with use_offset=True preserves the initial
-    #   world offset between source and target. To compute this offset
-    #   correctly, pbone is temporarily set to its edit-mode (rest) pose
-    #   so the offset is always rest-pose relative, never affected by
-    #   existing baked keyframes on the target armature.
+    # For root: TRANSFORM constraint maps source world head to target
+    #   world head with a rest-pose offset.  This replaces COPY_LOCATION
+    #   + use_offset because Blender computes the use_offset offset
+    #   lazily at depsgraph evaluation time — by then the pose may have
+    #   been restored, giving a wrong offset.  TRANSFORM embeds the
+    #   offset directly in the from→to parameters, so it never depends
+    #   on evaluation order.
     if is_root:
-        restore_frame = bpy.context.scene.frame_current
-        saved_matrix = pbone.matrix.copy()
-        bpy.context.scene.frame_set(0)
-        pbone.matrix = pbone.bone.matrix_local
-        bpy.context.view_layer.update()
-        try:
-            loc = pbone.constraints.new("COPY_LOCATION")
-            loc.name = CONSTRAINT_PREFIX + "Location"
-            loc.target = source_arm
-            loc.subtarget = src_name
-            loc.use_offset = True
-        finally:
-            pbone.matrix = saved_matrix
-            bpy.context.scene.frame_set(restore_frame)
+        src_rest_world = source_arm.matrix_world @ source_arm.data.bones[src_name].matrix_local
+        tgt_rest_world = target_arm.matrix_world @ pbone.bone.matrix_local
+        tc = pbone.constraints.new("TRANSFORM")
+        tc.name = CONSTRAINT_PREFIX + "Location"
+        tc.target = source_arm
+        tc.subtarget = src_name
+        tc.map_from = 'LOCATION'
+        tc.map_to = 'LOCATION'
+        tc.target_space = 'WORLD'
+        tc.owner_space = 'WORLD'
+        tc.use_motion_extrapolate = True
+        for axis in ('x', 'y', 'z'):
+            s = getattr(src_rest_world.translation, axis)
+            t = getattr(tgt_rest_world.translation, axis)
+            setattr(tc, f'from_min_{axis}', s)
+            setattr(tc, f'from_max_{axis}', s + 1.0)
+            setattr(tc, f'to_min_{axis}', t)
+            setattr(tc, f'to_max_{axis}', t + 1.0)
 
     rot = pbone.constraints.new("COPY_ROTATION")
     rot.name = CONSTRAINT_PREFIX + "Rotation"
