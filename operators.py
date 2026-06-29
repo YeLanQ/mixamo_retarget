@@ -197,8 +197,11 @@ class MIXAMO_OT_NewMixamoSkeleton(Operator):
 
         bpy.ops.object.mode_set(mode='OBJECT')
 
-        if s.skeleton_orientation == "X90":
-            armature.rotation_euler = (math.radians(90), 0.0, 0.0)
+        armature.rotation_euler = (
+            math.radians(s.skeleton_rotation_x),
+            math.radians(s.skeleton_rotation_y),
+            math.radians(s.skeleton_rotation_z),
+        )
 
         self.report({'INFO'},
             f"Created '{armature.name}' ({len(armature_data.bones)} bones)")
