@@ -2,6 +2,52 @@ import bpy
 from bpy.types import UIList
 
 
+# ---------------------------------------------------------------------------
+# Sync 3D bone selection → UI mapping row highlight
+# ---------------------------------------------------------------------------
+
+_cache_armature = ""
+_cache_bone = ""
+
+
+def _sync_bone_selection(*_args):
+    """When a bone is selected in the 3D viewport, highlight the
+    corresponding row in the bone-mapping list."""
+    context = bpy.context
+    scene = context.scene
+    arm = context.active_object
+    if not arm or arm.type != 'ARMATURE':
+        return
+    if context.mode != 'POSE':
+        return
+
+    s = getattr(scene, "mixamo_retarget", None)
+    if not s:
+        return
+
+    global _cache_armature, _cache_bone
+
+    selected = context.selected_pose_bones
+    if not selected:
+        return
+
+    arm_name = arm.name
+    selected_name = selected[0].name
+    if (arm_name, selected_name) == (_cache_armature, _cache_bone):
+        return
+    _cache_armature, _cache_bone = arm_name, selected_name
+
+    for idx, item in enumerate(s.bone_mappings):
+        if item.source_bone == selected_name or item.target_bone == selected_name:
+            if s.bone_mapping_index != idx:
+                s.bone_mapping_index = idx
+            break
+
+
+# ---------------------------------------------------------------------------
+# UI list
+# ---------------------------------------------------------------------------
+
 class MIXAMO_UL_BoneMappings(UIList):
     bl_idname = "MIXAMO_UL_BoneMappings"
 
@@ -62,8 +108,10 @@ def _safe_unregister_class(cls):
 def register():
     for cls in _classes:
         _safe_register_class(cls)
+    bpy.app.handlers.depsgraph_update_post.append(_sync_bone_selection)
 
 
 def unregister():
+    bpy.app.handlers.depsgraph_update_post.remove(_sync_bone_selection)
     for cls in reversed(_classes):
         _safe_unregister_class(cls)

@@ -97,6 +97,10 @@ class MIXAMO_PT_Import(MIXAMO_PT_Base, Panel):
     bl_idname = "MIXAMO_PT_Import"
     bl_order = 10
 
+    @classmethod
+    def poll(cls, context):
+        return context.mode == 'OBJECT'
+
     def draw(self, context):
         layout = self.layout
         s = context.scene.mixamo_retarget
@@ -136,6 +140,10 @@ class MIXAMO_PT_Retarget(MIXAMO_PT_Base, Panel):
     bl_label = "Retarget"
     bl_idname = "MIXAMO_PT_Retarget"
     bl_order = 20
+
+    @classmethod
+    def poll(cls, context):
+        return context.mode in {'OBJECT', 'POSE'}
 
     def draw(self, context):
         layout = self.layout
