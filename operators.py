@@ -403,8 +403,14 @@ class MIXAMO_OT_SelectMappingBone(Operator):
         pbone = arm.pose.bones.get(self.bone_name)
         if not pbone:
             return {'CANCELLED'}
-        arm.data.bone_selection = {pbone.name}
-        arm.data.bones.active = pbone.bone
+        data = arm.data
+        if hasattr(data, "bone_selection"):
+            data.bone_selection = {pbone.name}
+        elif hasattr(next(iter(data.bones), None), "select"):
+            for b in data.bones:
+                b.select = False
+            data.bones[pbone.name].select = True
+        data.bones.active = pbone.bone
         return {'FINISHED'}
 
 
