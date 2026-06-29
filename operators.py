@@ -203,6 +203,10 @@ class MIXAMO_OT_NewMixamoSkeleton(Operator):
                 math.radians(s.skeleton_rotation_y),
                 math.radians(s.skeleton_rotation_z),
             )
+            bpy.ops.object.select_all(action='DESELECT')
+            armature.select_set(True)
+            context.view_layer.objects.active = armature
+            bpy.ops.object.transform_apply(location=False, rotation=True, scale=False)
 
         self.report({'INFO'},
             f"Created '{armature.name}' ({len(armature_data.bones)} bones)")
