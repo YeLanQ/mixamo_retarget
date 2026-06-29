@@ -481,9 +481,15 @@ def detect_skeleton(
 
 def _default_mode_for_human_bone(human_bone_name: str) -> str:
     """Determine the retarget mode for a human bone.
-    Finger bones use CHILD_OF to preserve joint positions; others use COPY_ROTATION.
+    Hips uses COPY_TRANSFORMS (position + rotation for root motion).
+    Finger bones use CHILD_OF to preserve joint positions.
+    All other bones use COPY_ROTATION.
     """
-    return "CHILD_OF" if human_bone_name in FINGER_HUMAN_BONES else "COPY_ROTATION"
+    if human_bone_name == "hips":
+        return "COPY_TRANSFORMS"
+    if human_bone_name in FINGER_HUMAN_BONES:
+        return "CHILD_OF"
+    return "COPY_ROTATION"
 
 
 def build_mapping_from_human_bones(
@@ -574,8 +580,11 @@ MIXAMO_BONE_HINTS = [
 
 def _default_mode_for_hint(hint_name: str) -> str:
     """Determine retarget mode from a MIXAMO_BONE_HINTS name.
-    Bones starting with LeftHand/RightHand (but not the hand itself) are fingers → CHILD_OF.
+    Hips → COPY_TRANSFORMS.  Finger bones (LeftHand*/RightHand* excluding hand itself) → CHILD_OF.
+    Others → COPY_ROTATION.
     """
+    if hint_name == "Hips":
+        return "COPY_TRANSFORMS"
     for prefix in ("LeftHand", "RightHand"):
         if hint_name.startswith(prefix) and hint_name != prefix:
             return "CHILD_OF"
