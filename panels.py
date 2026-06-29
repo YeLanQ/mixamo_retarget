@@ -132,23 +132,6 @@ class MIXAMO_PT_Import(MIXAMO_PT_Base, Panel):
         self.layout.label(text="", icon='IMPORT')
 
 
-def _sync_selection_to_panel(context):
-    """Sync viewport bone selection to the bone mapping list index."""
-    s = context.scene.mixamo_retarget
-    arm = context.active_object
-    if not arm or arm.type != 'ARMATURE' or context.mode != 'POSE':
-        return
-    selected = context.selected_pose_bones
-    if not selected:
-        return
-    bone_name = selected[0].name
-    for i, item in enumerate(s.bone_mappings):
-        if item.target_bone == bone_name or item.source_bone == bone_name:
-            if s.bone_mapping_index != i:
-                s.bone_mapping_index = i
-            break
-
-
 class MIXAMO_PT_Retarget(MIXAMO_PT_Base, Panel):
     bl_label = "Retarget"
     bl_idname = "MIXAMO_PT_Retarget"
@@ -157,8 +140,6 @@ class MIXAMO_PT_Retarget(MIXAMO_PT_Base, Panel):
     def draw(self, context):
         layout = self.layout
         s = context.scene.mixamo_retarget
-
-        _sync_selection_to_panel(context)
 
         box = layout.box()
         box.label(text="Armatures", icon='ARMATURE_DATA')
