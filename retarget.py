@@ -90,6 +90,9 @@ HUMAN_BONE_NAMES = [
     "rightLittleProximal", "rightLittleIntermediate", "rightLittleDistal",
 ]
 
+# Subset of finger/hand bone names (excluding palm/wrist)
+FINGER_HUMAN_BONES = frozenset(HUMAN_BONE_NAMES[81:])
+
 REQUIRED_BONE_NAMES = frozenset([
     "hips", "spine", "head",
     "leftUpperLeg", "leftLowerLeg", "leftFoot",
@@ -476,13 +479,20 @@ def detect_skeleton(
 # Bone mapping between source and target armatures
 # ============================================================================
 
+def _default_mode_for_human_bone(human_bone_name: str) -> str:
+    """Determine the retarget mode for a human bone.
+    Finger bones use CHILD_OF to preserve joint positions; others use COPY_ROTATION.
+    """
+    return "CHILD_OF" if human_bone_name in FINGER_HUMAN_BONES else "COPY_ROTATION"
+
+
 def build_mapping_from_human_bones(
     source_arm: bpy.types.Object,
     target_arm: bpy.types.Object,
-) -> list[tuple[str, str]]:
+) -> list[tuple[str, str, str]]:
     """Build bone mapping by detecting human skeleton on both armatures
     and matching them via the human bone specification.
-    Returns list of (source_bone_name, target_bone_name).
+    Returns list of (source_bone_name, target_bone_name, retarget_mode).
     """
     src_detected = detect_skeleton(source_arm)
     tgt_detected = detect_skeleton(target_arm)
@@ -496,7 +506,7 @@ def build_mapping_from_human_bones(
         src_bn = src_by_human.get(hb)
         tgt_bn = tgt_by_human.get(hb)
         if src_bn and tgt_bn and tgt_bn not in used_tgt:
-            result.append((src_bn, tgt_bn))
+            result.append((src_bn, tgt_bn, _default_mode_for_human_bone(hb)))
             used_tgt.add(tgt_bn)
 
     return result
@@ -562,8 +572,18 @@ MIXAMO_BONE_HINTS = [
 ]
 
 
+def _default_mode_for_hint(hint_name: str) -> str:
+    """Determine retarget mode from a MIXAMO_BONE_HINTS name.
+    Bones starting with LeftHand/RightHand (but not the hand itself) are fingers → CHILD_OF.
+    """
+    for prefix in ("LeftHand", "RightHand"):
+        if hint_name.startswith(prefix) and hint_name != prefix:
+            return "CHILD_OF"
+    return "COPY_ROTATION"
+
+
 def auto_build_mapping(source_arm: bpy.types.Object,
-                       target_arm: bpy.types.Object) -> list[tuple[str, str]]:
+                       target_arm: bpy.types.Object) -> list[tuple[str, str, str]]:
     src_name_list = list(source_arm.data.bones.keys())
     tgt_name_list = list(target_arm.data.bones.keys())
     src_norm_map = {b.name: _normalize(b.name) for b in source_arm.data.bones}
@@ -601,7 +621,7 @@ def auto_build_mapping(source_arm: bpy.types.Object,
         if tgt_matched is None or tgt_matched in mapped_tgt_names:
             continue
 
-        result.append((src_matched, tgt_matched))
+        result.append((src_matched, tgt_matched, _default_mode_for_hint(src_hint)))
         mapped_src_names.add(src_matched)
         mapped_tgt_names.add(tgt_matched)
 

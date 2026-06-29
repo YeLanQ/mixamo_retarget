@@ -279,10 +279,16 @@ class MIXAMO_OT_AutoMapBones(Operator):
 
         s.bone_mappings.clear()
 
-        for src, tgt in pairs:
+        for entry in pairs:
+            if len(entry) >= 3:
+                src, tgt, mode = entry[:3]
+            else:
+                src, tgt = entry
+                mode = "COPY_ROTATION"
             item = s.bone_mappings.add()
             item.source_bone = src
             item.target_bone = tgt
+            item.retarget_mode = mode
             item.enabled = True
 
         self.report({'INFO'}, f"Auto-matched {len(pairs)} bone pairs")
