@@ -116,6 +116,7 @@ class MIXAMO_PT_Import(MIXAMO_PT_Base, Panel):
         row.prop(s, "skeleton_scale", text="Scale")
         row.prop(s, "skeleton_name", text="")
         row = box.row(align=True)
+        row.prop(s, "skeleton_apply_rotation", text="")
         row.label(text="Rotation")
         row.prop(s, "skeleton_rotation_x", text="X")
         row.prop(s, "skeleton_rotation_y", text="Y")

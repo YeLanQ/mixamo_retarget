@@ -186,6 +186,12 @@ class MIXAMO_SceneSettings(PropertyGroup):
         precision=1,
     )
 
+    skeleton_apply_rotation: BoolProperty(
+        name="Apply Rotation",
+        description="Apply the rotation values to the armature on creation",
+        default=True,
+    )
+
 class MIXAMO_AddonPreferences(AddonPreferences):
     bl_idname = __package__
 
