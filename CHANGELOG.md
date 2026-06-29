@@ -1,5 +1,27 @@
 # Changelog
 
+## [2.0.2] - 2026-06-29
+
+### Added
+- `MIXAMO_OT_FillMappingBone` — `→` button in Retarget panel fills source/target bone name from the selected bone in the viewport
+- Presets stored as `.json` files in `presets/` directory (instead of addon preferences), enabling manual editing and sharing
+- `MIXAMO_OT_DeletePreset` now removes the preset file from disk
+- 新增 `→` 按钮：从视口选中骨骼自动填入映射行
+- 预设改为 `presets/` 目录中的 `*.json` 文件存储（取代 addon prefs），支持手动编辑和分享
+
+### Changed
+- `Remove Constraints` now only removes constraints from mapped (enabled) bones, not all constraints on the armature
+- Presets panel lists files from `presets/` directory with improved UI
+- `package.ps1` includes the `presets/` directory in the zip
+- 移除约束仅作用于已映射骨骼，不再清理骨架上的全部约束
+
+### Removed
+- Panel→viewport bone selection sync (removed `_select_bone_in_viewport` and Direction 2 logic in `__init__.py`)
+- Redundant `_sync_bone_selection` handler in `ui_list.py` (logic consolidated into `__init__.py`)
+- `BONE_DATA` icon buttons from each mapping row in `ui_list.py`
+- 移除面板→视口的骨骼选中反向同步
+- 移除 `ui_list.py` 中冗余的同步 handler 和每行的骨骼图标按钮
+
 ## [2.0.1] - 2026-06-29
 
 ### Added

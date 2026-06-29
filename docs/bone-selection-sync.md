@@ -8,7 +8,7 @@
 |------|---------|------|
 | 视口 → UI | 在 3D Viewport 点击骨骼 | `depsgraph_update_post` handler |
 
-不包含 UI → 视口方向：点击行不会自动选中骨骼。🦴 图标按钮 (`MIXAMO_OT_SelectMappingBone`) 是一个独立的 Operator，不属于自动同步体系。
+**不包含** UI → 视口方向：点击行不会自动选中骨骼。`MIXAMO_OT_SelectMappingBone`（🦴 图标）是一个独立 Operator，已于 `ui_list.py` 中移除，不再显示在行上；如需从面板定位到视口骨骼，请使用 `MIXAMO_OT_FillMappingBone`（`→` 按钮）反向填入。
 
 ## 架构图
 
@@ -19,7 +19,7 @@
 │ (pose mode)  │                                      │ matching row │
 └──────┬───────┘                                      └──────┬───────┘
        │                                                     │
-       │  _sync_bone_selection()                              │ bone_mapping_index
+       │  _sync_selection()                                   │ bone_mapping_index
        │  finds bone_name in bone_mappings                    │ (IntProperty)
        ▼                                                     ▼
    ┌─────────────────────────────────────────────────────────────┐
@@ -29,7 +29,8 @@
 
 ## 代码位置
 
-- `ui_list.py` — `_sync_bone_selection()` handler + `MIXAMO_UL_BoneMappings` UIList
+- `__init__.py` — `_sync_selection()` handler （`depsgraph_update_post`）
+- `ui_list.py` — `MIXAMO_UL_BoneMappings` UIList（仅渲染，不含同步逻辑）
 
 ## 触发链路
 
@@ -38,7 +39,7 @@
   └→ 骨骼选中状态变化
     └→ Depsgraph 重新求值
       └→ depsgraph_update_post handler 触发
-        └→ _sync_bone_selection() 执行
+        └→ _sync_selection() 执行
           ├─ 检查 armature / mode / 场景属性
           ├─ 获取第一个 selected_pose_bone 名称
           ├─ 与缓存比较，相同则 return（防抖）
@@ -51,46 +52,40 @@
 ## 实现
 
 ```python
-_cache_armature = ""
-_cache_bone = ""
+_last_selected_bone = ""
+_last_mapping_index = -1
 
-def _sync_bone_selection(*_args):
+@persistent
+def _sync_selection(scene):
     context = bpy.context
-    scene = context.scene
+    s = context.scene.mixamo_retarget
     arm = context.active_object
-    if not arm or arm.type != 'ARMATURE':
-        return
-    if context.mode != 'POSE':
+    if not arm or arm.type != 'ARMATURE' or context.mode != 'POSE':
         return
 
-    s = getattr(scene, "mixamo_retarget", None)
-    if not s:
-        return
-
-    global _cache_armature, _cache_bone
-
+    current_index = s.bone_mapping_index
     selected = context.selected_pose_bones
-    if not selected:
-        return
+    current_bone = selected[0].name if selected else ""
 
-    arm_name = arm.name
-    selected_name = selected[0].name
-    if (arm_name, selected_name) == (_cache_armature, _cache_bone):
-        return
-    _cache_armature, _cache_bone = arm_name, selected_name
+    if current_bone and current_bone != _last_selected_bone:
+        for i, item in enumerate(s.bone_mappings):
+            if item.target_bone == current_bone or item.source_bone == current_bone:
+                if current_index != i:
+                    s.bone_mapping_index = i
+                _last_selected_bone = current_bone
+                _last_mapping_index = i
+                return
 
-    for idx, item in enumerate(s.bone_mappings):
-        if item.source_bone == selected_name or item.target_bone == selected_name:
-            if s.bone_mapping_index != idx:
-                s.bone_mapping_index = idx
-            break
+    if current_bone:
+        _last_selected_bone = current_bone
+    _last_mapping_index = current_index
 ```
 
 ## 缓存防抖
 
 `depsgraph_update_post` 每帧可能被多次触发（动画播放、视口操作等）。
 
-使用 `(_cache_armature, _cache_bone)` 模块级元组记录上一次同步的状态：
+使用 `_last_selected_bone` + `_last_mapping_index` 模块级变量记录上一次同步的状态：
 
 - 骨骼未变化 → 直接 return，零开销
 - 变化后更新缓存再继续，避免同一骨骼反复搜索映射表
@@ -100,7 +95,7 @@ def _sync_bone_selection(*_args):
 ### 为什么只做单向同步？
 
 - **视口选中骨骼 → 行高亮**：用户定位骨骼后，需要快速在 Mapping 面板找到对应行
-- 反过来（行点击 → 选中骨骼）是显式操作，应由 🦴 图标按钮触发，不属于自动同步范畴
+- 反过来（行点击 → 选中骨骼）原本通过 `_select_bone_in_viewport()` 实现，但会与用户手动操作骨骼相互干扰，已移除
 
 ### 为什么不使用 `bone_mapping_index` 的 msgbus 订阅？
 
@@ -121,17 +116,15 @@ Blender 的 `msgbus.subscribe_rna` 可以监听属性变化，但：
 
 ```python
 def register():
-    for cls in _classes:
-        _safe_register_class(cls)
-    bpy.app.handlers.depsgraph_update_post.append(_sync_bone_selection)
+    ...
+    bpy.app.handlers.depsgraph_update_post.append(_sync_selection)
 
 def unregister():
-    bpy.app.handlers.depsgraph_update_post.remove(_sync_bone_selection)
-    for cls in reversed(_classes):
-        _safe_unregister_class(cls)
+    bpy.app.handlers.depsgraph_update_post.remove(_sync_selection)
+    ...
 ```
 
-- handler 在 `ui_list.register()` 中追加到全局列表
+- handler 在 `__init__.register()` 中追加到全局列表
 - 卸载时 remove，避免 dangling handler 导致 Blender 崩溃
 
 ## 验证方法
@@ -139,5 +132,4 @@ def unregister():
 1. 打开 Bone Mapping 面板（Retarget 标签页）
 2. 在 3D Viewport 中 Pose Mode 下点击骨骼
 3. 观察 template_list 中对应行是否同步高亮
-4. 点击某行（不点 🦴 图标），确认视口骨骼选中状态不变
-5. 在 `source_bone` / `target_bone` Search 字段输入改名，确认不会干扰视口选中同步
+4. 点击某行，确认视口骨骼选中状态不变（无反向同步）

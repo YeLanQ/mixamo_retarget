@@ -15,7 +15,7 @@ A Blender add-on for retargeting Mixamo FBX animations between Mixamo-rigged cha
 
 1. **Import a Mixamo FBX** — `Import Mixamo FBX` button, or manually import and click `Select as Source`
 2. **Select your character armature** — click `Select as Target`
-3. **Auto-match bones** — click `Auto-Match Bones`, or manually add bone pairs
+3. **Auto-match bones** — click `Auto-Match Bones`, or manually add bone pairs (use the `→` button to fill bone name from selected bone in viewport)
 4. **Apply constraints** — click `Apply Constraints` to drive the target rig
 5. **Bake animation** — set frame range and click `Bake & Remove Constraints`
 
@@ -49,7 +49,12 @@ See `docs/bone-editor.md` for details.
 | Import Mixamo FBX | 10 | No | FBX import & Mixamo skeleton creation |
 | Retarget | 20 | No | Armature selection, bone mapping, constraints |
 | Bake & Interpolate | 30 | Yes | Baking, smoothing, prediction, gap filling |
-| Presets | 40 | No | Save/load/export/import bone mappings |
+| Presets | 40 | No | Save/load/export/import bone mappings (stored as `.json` files in the `presets/` directory) |
+
+### Bone Mapping Tips
+
+- Use the **`→`** button to fill the source/target bone name from the currently selected bone in the viewport
+- Bone mapping rows automatically highlight when you select the corresponding bone in 3D viewport (Pose Mode)
 
 ## Documentation
 

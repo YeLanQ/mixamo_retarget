@@ -15,7 +15,7 @@ Blender 插件，用于在 Mixamo 骨骼角色之间重定向 Mixamo FBX 动画�
 
 1. **导入 Mixamo FBX** — 点击 `Import Mixamo FBX`，或手动导入后点击 `Select as Source`
 2. **选择目标角色骨骼** — 点击 `Select as Target`
-3. **自动匹配骨骼** — 点击 `Auto-Match Bones`，或手动添加骨骼映射对
+3. **自动匹配骨骼** — 点击 `Auto-Match Bones`，或手动添加骨骼映射对（选中骨骼后点击 `→` 按钮自动填入名称）
 4. **应用约束** — 点击 `Apply Constraints` 驱动目标骨骼
 5. **烘焙动画** — 设置帧范围后点击 `Bake & Remove Constraints`
 
@@ -49,7 +49,12 @@ Blender 插件，用于在 Mixamo 骨骼角色之间重定向 Mixamo FBX 动画�
 | Import Mixamo FBX | 10 | 否 | FBX 导入 & Mixamo 骨骼创建 |
 | Retarget | 20 | 否 | 骨骼选择、骨骼映射、约束 |
 | Bake & Interpolate | 30 | 必须 | 烘焙、平滑、预测、补帧 |
-| Presets | 40 | 否 | 保存/加载/导出/导入骨骼映射 |
+| Presets | 40 | 否 | 保存/加载/导出/导入骨骼映射（以 `.json` 文件存储在 `presets/` 目录中） |
+
+### 骨骼映射技巧
+
+- 在视口（姿态模式）中选中骨骼后，点击 `→` 按钮自动填入源/目标骨骼名
+- 在 3D 视口中选中骨骼时，对应的映射行会自动高亮（单向同步）
 
 ## 技术文档
 
