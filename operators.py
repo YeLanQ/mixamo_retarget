@@ -372,7 +372,7 @@ class MIXAMO_OT_ApplyRetargeting(Operator):
 
 
 class MIXAMO_OT_RemoveRetargeting(Operator):
-    """Remove all retargeting constraints from target armature"""
+    """Remove retargeting constraints from mapped bones only"""
     bl_idname = "mixamo_retarget.remove_retargeting"
     bl_label = "Remove Constraints"
 
@@ -381,7 +381,11 @@ class MIXAMO_OT_RemoveRetargeting(Operator):
         if not s.target_armature:
             self.report({'ERROR'}, "Set Target Armature.")
             return {'CANCELLED'}
-        n = rt.remove_retargeting_constraints(s.target_armature)
+        n = 0
+        for item in s.bone_mappings:
+            if item.enabled and item.target_bone:
+                n += rt.remove_retargeting_constraints_for_bone(
+                    s.target_armature, item.target_bone)
         self.report({'INFO'}, f"Removed {n} retargeting constraints")
         return {'FINISHED'}
 
@@ -411,6 +415,42 @@ class MIXAMO_OT_SelectMappingBone(Operator):
                 b.select = False
             data.bones[pbone.name].select = True
         data.bones.active = pbone.bone
+        return {'FINISHED'}
+
+
+class MIXAMO_OT_FillMappingBone(Operator):
+    """Fill source/target bone names from selected bones in the active armature"""
+    bl_idname = "mixamo_retarget.fill_mapping_bone"
+    bl_label = "Fill from Selected"
+    bl_description = "Fill source/target bone names from selected bones (active row)"
+
+    def execute(self, context):
+        s = context.scene.mixamo_retarget
+        idx = s.bone_mapping_index
+        if idx < 0 or idx >= len(s.bone_mappings):
+            self.report({'WARNING'}, "No bone mapping row selected")
+            return {'CANCELLED'}
+        item = s.bone_mappings[idx]
+
+        arm = context.active_object
+        if not arm or arm.type != 'ARMATURE' or context.mode != 'POSE':
+            self.report({'WARNING'}, "Select a bone in Pose Mode first")
+            return {'CANCELLED'}
+
+        selected = context.selected_pose_bones
+        if not selected:
+            self.report({'WARNING'}, "No bone selected in viewport")
+            return {'CANCELLED'}
+
+        bone_name = selected[0].name
+        if arm == s.source_armature:
+            item.source_bone = bone_name
+        elif arm == s.target_armature:
+            item.target_bone = bone_name
+        else:
+            self.report({'WARNING'}, "Active armature is neither source nor target")
+            return {'CANCELLED'}
+
         return {'FINISHED'}
 
 
@@ -555,13 +595,12 @@ class MIXAMO_OT_BakeRetargeting(Operator):
 
 
 class MIXAMO_OT_SavePreset(Operator):
-    """Save current bone mapping as a named preset"""
+    """Save current bone mapping as a preset file"""
     bl_idname = "mixamo_retarget.save_preset"
     bl_label = "Save Preset"
 
     def execute(self, context):
         s = context.scene.mixamo_retarget
-        prefs = context.preferences.addons[__package__].preferences
         name = s.preset_name.strip()
         if not name:
             self.report({'ERROR'}, "Enter a preset name first.")
@@ -570,13 +609,17 @@ class MIXAMO_OT_SavePreset(Operator):
         pairs = [{"src": item.source_bone, "tgt": item.target_bone,
                   "en": item.enabled, "mode": item.retarget_mode}
                  for item in s.bone_mappings]
-        rt.save_preset(prefs, name, pairs)
-        self.report({'INFO'}, f"Preset '{name}' saved ({len(pairs)} bone pairs)")
+        try:
+            rt.save_preset(None, name, pairs)
+            self.report({'INFO'}, f"Preset '{name}' saved ({len(pairs)} bone pairs)")
+        except Exception as e:
+            self.report({'ERROR'}, f"Save failed: {e}")
+            return {'CANCELLED'}
         return {'FINISHED'}
 
 
 class MIXAMO_OT_LoadPreset(Operator):
-    """Load a saved bone mapping preset"""
+    """Load a bone mapping preset from file"""
     bl_idname = "mixamo_retarget.load_preset"
     bl_label = "Load Preset"
 
@@ -584,10 +627,12 @@ class MIXAMO_OT_LoadPreset(Operator):
 
     def execute(self, context):
         s = context.scene.mixamo_retarget
-        prefs = context.preferences.addons[__package__].preferences
-        name = self.preset_name or s.preset_name.strip()
+        name = self.preset_name
+        if not name:
+            self.report({'ERROR'}, "Select a preset to load.")
+            return {'CANCELLED'}
 
-        pairs = rt.load_preset(prefs, name)
+        pairs = rt.load_preset(None, name)
         if pairs is None:
             self.report({'ERROR'}, f"Preset '{name}' not found.")
             return {'CANCELLED'}
@@ -605,25 +650,18 @@ class MIXAMO_OT_LoadPreset(Operator):
 
 
 class MIXAMO_OT_DeletePreset(Operator):
-    """Delete a saved bone mapping preset"""
+    """Delete a preset file"""
     bl_idname = "mixamo_retarget.delete_preset"
     bl_label = "Delete Preset"
 
     preset_name: StringProperty()
 
     def execute(self, context):
-        prefs = context.preferences.addons[__package__].preferences
         name = self.preset_name
-        try:
-            presets = json.loads(prefs.saved_presets)
-            if name in presets:
-                del presets[name]
-                prefs.saved_presets = json.dumps(presets)
-                self.report({'INFO'}, f"Deleted preset '{name}'")
-            else:
-                self.report({'WARNING'}, f"Preset '{name}' not found")
-        except Exception as e:
-            self.report({'ERROR'}, str(e))
+        if rt.delete_preset_file(name):
+            self.report({'INFO'}, f"Deleted preset '{name}'")
+        else:
+            self.report({'WARNING'}, f"Preset '{name}' not found")
         return {'FINISHED'}
 
 
@@ -821,6 +859,7 @@ _classes = [
     MIXAMO_OT_AutoMapBones,
     MIXAMO_OT_AddBoneMapping,
     MIXAMO_OT_RemoveBoneMapping,
+    MIXAMO_OT_FillMappingBone,
     MIXAMO_OT_ApplyRetargeting,
     MIXAMO_OT_RemoveRetargeting,
     MIXAMO_OT_RemoveSingleRetargeting,

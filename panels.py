@@ -192,6 +192,8 @@ class MIXAMO_PT_Retarget(MIXAMO_PT_Base, Panel):
         col = row.column(align=True)
         col.operator("mixamo_retarget.add_bone_mapping", text="", icon='ADD')
         col.operator("mixamo_retarget.remove_bone_mapping", text="", icon='REMOVE')
+        col.separator()
+        col.operator("mixamo_retarget.fill_mapping_bone", text="", icon='RIGHTARROW')
 
         layout.separator()
 
@@ -255,21 +257,21 @@ class MIXAMO_PT_Presets(MIXAMO_PT_Base, Panel):
         layout = self.layout
         s = context.scene.mixamo_retarget
 
+        from . import retarget as rt
+
         box = layout.box()
         box.label(text="Bone Map Presets", icon='PRESET')
+
+        # Save section
         row = box.row(align=True)
         row.prop(s, "preset_name", text="")
         row.operator("mixamo_retarget.save_preset", text="", icon='FILE_TICK')
-        row.operator("mixamo_retarget.load_preset", text="", icon='IMPORT').preset_name = s.preset_name
 
-        try:
-            prefs = context.preferences.addons[__package__].preferences
-            from . import retarget as rt
-            preset_names = rt.list_presets(prefs)
-        except Exception:
-            preset_names = []
+        # Preset list from presets/ directory
+        preset_names = rt.list_presets(None)
 
         if preset_names:
+            box.label(text="Select a preset:", icon='TRIA_RIGHT_BAR')
             col = box.column(align=True)
             for name in preset_names:
                 row2 = col.row(align=True)
@@ -277,10 +279,13 @@ class MIXAMO_PT_Presets(MIXAMO_PT_Base, Panel):
                 op_load.preset_name = name
                 op_del = row2.operator("mixamo_retarget.delete_preset", text="", icon='TRASH')
                 op_del.preset_name = name
+        else:
+            box.label(text="No presets found", icon='INFO')
 
+        box.separator()
         row = box.row(align=True)
-        row.operator("mixamo_retarget.export_preset_file", text="Export to File", icon='EXPORT')
-        row.operator("mixamo_retarget.import_preset_file", text="Import from File", icon='IMPORT')
+        row.operator("mixamo_retarget.export_preset_file", text="Export", icon='EXPORT')
+        row.operator("mixamo_retarget.import_preset_file", text="Import", icon='IMPORT')
 
 
 _classes = [

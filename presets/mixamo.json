@@ -1,0 +1,314 @@
+[
+  {
+    "src": "mixamorig:Hips",
+    "tgt": "mixamorig:Hips",
+    "en": true,
+    "mode": "COPY_TRANSFORMS"
+  },
+  {
+    "src": "mixamorig:Spine",
+    "tgt": "mixamorig:Spine",
+    "en": true,
+    "mode": "COPY_ROTATION"
+  },
+  {
+    "src": "mixamorig:Spine1",
+    "tgt": "mixamorig:Spine1",
+    "en": true,
+    "mode": "COPY_ROTATION"
+  },
+  {
+    "src": "mixamorig:Spine2",
+    "tgt": "mixamorig:Spine2",
+    "en": true,
+    "mode": "COPY_ROTATION"
+  },
+  {
+    "src": "mixamorig:Neck",
+    "tgt": "mixamorig:Neck",
+    "en": true,
+    "mode": "COPY_ROTATION"
+  },
+  {
+    "src": "mixamorig:Head",
+    "tgt": "mixamorig:Head",
+    "en": true,
+    "mode": "COPY_ROTATION"
+  },
+  {
+    "src": "mixamorig:LeftUpLeg",
+    "tgt": "mixamorig:LeftUpLeg",
+    "en": true,
+    "mode": "COPY_ROTATION"
+  },
+  {
+    "src": "mixamorig:LeftLeg",
+    "tgt": "mixamorig:LeftLeg",
+    "en": true,
+    "mode": "COPY_ROTATION"
+  },
+  {
+    "src": "mixamorig:LeftFoot",
+    "tgt": "mixamorig:LeftFoot",
+    "en": true,
+    "mode": "COPY_ROTATION"
+  },
+  {
+    "src": "mixamorig:LeftToeBase",
+    "tgt": "mixamorig:LeftToeBase",
+    "en": true,
+    "mode": "COPY_ROTATION"
+  },
+  {
+    "src": "mixamorig:RightUpLeg",
+    "tgt": "mixamorig:RightUpLeg",
+    "en": true,
+    "mode": "COPY_ROTATION"
+  },
+  {
+    "src": "mixamorig:RightLeg",
+    "tgt": "mixamorig:RightLeg",
+    "en": true,
+    "mode": "COPY_ROTATION"
+  },
+  {
+    "src": "mixamorig:RightFoot",
+    "tgt": "mixamorig:RightFoot",
+    "en": true,
+    "mode": "COPY_ROTATION"
+  },
+  {
+    "src": "mixamorig:RightToeBase",
+    "tgt": "mixamorig:RightToeBase",
+    "en": true,
+    "mode": "COPY_ROTATION"
+  },
+  {
+    "src": "mixamorig:LeftShoulder",
+    "tgt": "mixamorig:LeftShoulder",
+    "en": true,
+    "mode": "COPY_ROTATION"
+  },
+  {
+    "src": "mixamorig:LeftArm",
+    "tgt": "mixamorig:LeftArm",
+    "en": true,
+    "mode": "COPY_ROTATION"
+  },
+  {
+    "src": "mixamorig:LeftForeArm",
+    "tgt": "mixamorig:LeftForeArm",
+    "en": true,
+    "mode": "COPY_ROTATION"
+  },
+  {
+    "src": "mixamorig:LeftHand",
+    "tgt": "mixamorig:LeftHand",
+    "en": true,
+    "mode": "COPY_ROTATION"
+  },
+  {
+    "src": "mixamorig:RightShoulder",
+    "tgt": "mixamorig:RightShoulder",
+    "en": true,
+    "mode": "COPY_ROTATION"
+  },
+  {
+    "src": "mixamorig:RightArm",
+    "tgt": "mixamorig:RightArm",
+    "en": true,
+    "mode": "COPY_ROTATION"
+  },
+  {
+    "src": "mixamorig:RightForeArm",
+    "tgt": "mixamorig:RightForeArm",
+    "en": true,
+    "mode": "COPY_ROTATION"
+  },
+  {
+    "src": "mixamorig:RightHand",
+    "tgt": "mixamorig:RightHand",
+    "en": true,
+    "mode": "COPY_ROTATION"
+  },
+  {
+    "src": "mixamorig:LeftHandThumb1",
+    "tgt": "mixamorig:LeftHandThumb1",
+    "en": true,
+    "mode": "LOCAL_ROTATION"
+  },
+  {
+    "src": "mixamorig:LeftHandThumb2",
+    "tgt": "mixamorig:LeftHandThumb2",
+    "en": true,
+    "mode": "LOCAL_ROTATION"
+  },
+  {
+    "src": "mixamorig:LeftHandThumb3",
+    "tgt": "mixamorig:LeftHandThumb3",
+    "en": true,
+    "mode": "LOCAL_ROTATION"
+  },
+  {
+    "src": "mixamorig:LeftHandIndex1",
+    "tgt": "mixamorig:LeftHandIndex1",
+    "en": true,
+    "mode": "LOCAL_ROTATION"
+  },
+  {
+    "src": "mixamorig:LeftHandIndex2",
+    "tgt": "mixamorig:LeftHandIndex2",
+    "en": true,
+    "mode": "LOCAL_ROTATION"
+  },
+  {
+    "src": "mixamorig:LeftHandIndex3",
+    "tgt": "mixamorig:LeftHandIndex3",
+    "en": true,
+    "mode": "LOCAL_ROTATION"
+  },
+  {
+    "src": "mixamorig:LeftHandMiddle1",
+    "tgt": "mixamorig:LeftHandMiddle1",
+    "en": true,
+    "mode": "LOCAL_ROTATION"
+  },
+  {
+    "src": "mixamorig:LeftHandMiddle2",
+    "tgt": "mixamorig:LeftHandMiddle2",
+    "en": true,
+    "mode": "LOCAL_ROTATION"
+  },
+  {
+    "src": "mixamorig:LeftHandMiddle3",
+    "tgt": "mixamorig:LeftHandMiddle3",
+    "en": true,
+    "mode": "LOCAL_ROTATION"
+  },
+  {
+    "src": "mixamorig:LeftHandRing1",
+    "tgt": "mixamorig:LeftHandRing1",
+    "en": true,
+    "mode": "LOCAL_ROTATION"
+  },
+  {
+    "src": "mixamorig:LeftHandRing2",
+    "tgt": "mixamorig:LeftHandRing2",
+    "en": true,
+    "mode": "LOCAL_ROTATION"
+  },
+  {
+    "src": "mixamorig:LeftHandRing3",
+    "tgt": "mixamorig:LeftHandRing3",
+    "en": true,
+    "mode": "LOCAL_ROTATION"
+  },
+  {
+    "src": "mixamorig:LeftHandPinky1",
+    "tgt": "mixamorig:LeftHandPinky1",
+    "en": true,
+    "mode": "LOCAL_ROTATION"
+  },
+  {
+    "src": "mixamorig:LeftHandPinky2",
+    "tgt": "mixamorig:LeftHandPinky2",
+    "en": true,
+    "mode": "LOCAL_ROTATION"
+  },
+  {
+    "src": "mixamorig:LeftHandPinky3",
+    "tgt": "mixamorig:LeftHandPinky3",
+    "en": true,
+    "mode": "LOCAL_ROTATION"
+  },
+  {
+    "src": "mixamorig:RightHandThumb1",
+    "tgt": "mixamorig:RightHandThumb1",
+    "en": true,
+    "mode": "LOCAL_ROTATION"
+  },
+  {
+    "src": "mixamorig:RightHandThumb2",
+    "tgt": "mixamorig:RightHandThumb2",
+    "en": true,
+    "mode": "LOCAL_ROTATION"
+  },
+  {
+    "src": "mixamorig:RightHandThumb3",
+    "tgt": "mixamorig:RightHandThumb3",
+    "en": true,
+    "mode": "LOCAL_ROTATION"
+  },
+  {
+    "src": "mixamorig:RightHandIndex1",
+    "tgt": "mixamorig:RightHandIndex1",
+    "en": true,
+    "mode": "LOCAL_ROTATION"
+  },
+  {
+    "src": "mixamorig:RightHandIndex2",
+    "tgt": "mixamorig:RightHandIndex2",
+    "en": true,
+    "mode": "LOCAL_ROTATION"
+  },
+  {
+    "src": "mixamorig:RightHandIndex3",
+    "tgt": "mixamorig:RightHandIndex3",
+    "en": true,
+    "mode": "LOCAL_ROTATION"
+  },
+  {
+    "src": "mixamorig:RightHandMiddle1",
+    "tgt": "mixamorig:RightHandMiddle1",
+    "en": true,
+    "mode": "LOCAL_ROTATION"
+  },
+  {
+    "src": "mixamorig:RightHandMiddle2",
+    "tgt": "mixamorig:RightHandMiddle2",
+    "en": true,
+    "mode": "LOCAL_ROTATION"
+  },
+  {
+    "src": "mixamorig:RightHandMiddle3",
+    "tgt": "mixamorig:RightHandMiddle3",
+    "en": true,
+    "mode": "LOCAL_ROTATION"
+  },
+  {
+    "src": "mixamorig:RightHandRing1",
+    "tgt": "mixamorig:RightHandRing1",
+    "en": true,
+    "mode": "LOCAL_ROTATION"
+  },
+  {
+    "src": "mixamorig:RightHandRing2",
+    "tgt": "mixamorig:RightHandRing2",
+    "en": true,
+    "mode": "LOCAL_ROTATION"
+  },
+  {
+    "src": "mixamorig:RightHandRing3",
+    "tgt": "mixamorig:RightHandRing3",
+    "en": true,
+    "mode": "LOCAL_ROTATION"
+  },
+  {
+    "src": "mixamorig:RightHandPinky1",
+    "tgt": "mixamorig:RightHandPinky1",
+    "en": true,
+    "mode": "LOCAL_ROTATION"
+  },
+  {
+    "src": "mixamorig:RightHandPinky2",
+    "tgt": "mixamorig:RightHandPinky2",
+    "en": true,
+    "mode": "LOCAL_ROTATION"
+  },
+  {
+    "src": "mixamorig:RightHandPinky3",
+    "tgt": "mixamorig:RightHandPinky3",
+    "en": true,
+    "mode": "LOCAL_ROTATION"
+  }
+]

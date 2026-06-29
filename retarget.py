@@ -1472,28 +1472,46 @@ def interpolate_armature_animation(
     return stats
 
 
+import os
+
+_PRESETS_DIR = os.path.join(os.path.dirname(__file__), "presets")
+
+
+def _preset_path(name: str) -> str:
+    if not name.endswith(".json"):
+        name += ".json"
+    return os.path.join(_PRESETS_DIR, name)
+
+
 def save_preset(prefs, preset_name: str, bone_pairs: list[dict]) -> None:
     import json
-    try:
-        presets = json.loads(prefs.saved_presets)
-    except Exception:
-        presets = {}
-    presets[preset_name] = bone_pairs
-    prefs.saved_presets = json.dumps(presets)
+    path = _preset_path(preset_name)
+    with open(path, "w", encoding="utf-8") as f:
+        json.dump(bone_pairs, f, indent=2, ensure_ascii=False)
 
 
 def load_preset(prefs, preset_name: str) -> list[dict] | None:
     import json
+    path = _preset_path(preset_name)
+    if not os.path.exists(path):
+        return None
     try:
-        presets = json.loads(prefs.saved_presets)
-        return presets.get(preset_name)
+        with open(path, "r", encoding="utf-8") as f:
+            return json.load(f)
     except Exception:
         return None
 
 
 def list_presets(prefs) -> list[str]:
-    import json
-    try:
-        return list(json.loads(prefs.saved_presets).keys())
-    except Exception:
+    if not os.path.isdir(_PRESETS_DIR):
         return []
+    files = sorted(f for f in os.listdir(_PRESETS_DIR) if f.endswith(".json"))
+    return [os.path.splitext(f)[0] for f in files]
+
+
+def delete_preset_file(preset_name: str) -> bool:
+    path = _preset_path(preset_name)
+    if os.path.exists(path):
+        os.remove(path)
+        return True
+    return False

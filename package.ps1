@@ -39,18 +39,20 @@ $FilesToInclude = @(
     "ui_list.py"
 )
 
+$DirsToInclude = @(
+    "presets"
+)
+
 $TempDir = Join-Path $SourceDir "temp_package"
 if (Test-Path $TempDir) {
     Remove-Item $TempDir -Recurse -Force
 }
 New-Item -ItemType Directory -Path $TempDir | Out-Null
-$TempAddonDir = Join-Path $TempDir "mixamo_retarget"
-New-Item -ItemType Directory -Path $TempAddonDir | Out-Null
 
 Write-Host "Copying files..."
 foreach ($File in $FilesToInclude) {
     $SourceFile = Join-Path $SourceDir $File
-    $DestFile = Join-Path $TempAddonDir $File
+    $DestFile = Join-Path $TempDir $File
     if (Test-Path $SourceFile) {
         Copy-Item $SourceFile $DestFile
         Write-Host "  Added: $File"
@@ -59,9 +61,20 @@ foreach ($File in $FilesToInclude) {
     }
 }
 
+foreach ($Dir in $DirsToInclude) {
+    $SourceDirPath = Join-Path $SourceDir $Dir
+    $DestDirPath = Join-Path $TempDir $Dir
+    if (Test-Path $SourceDirPath) {
+        Copy-Item -Recurse $SourceDirPath $DestDirPath
+        Write-Host "  Added: $Dir\"
+    } else {
+        Write-Host "  Warning: $Dir not found, skipping"
+    }
+}
+
 Write-Host ""
 Write-Host "Creating zip archive..."
-Compress-Archive -Path $TempAddonDir -DestinationPath $ZipPath -Force
+Compress-Archive -Path "$TempDir\*" -DestinationPath $ZipPath -Force
 
 Remove-Item $TempDir -Recurse -Force
 

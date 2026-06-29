@@ -1,0 +1,308 @@
+[
+  {
+    "src": "mixamorig:Hips",
+    "tgt": "spine",
+    "en": true,
+    "mode": "COPY_TRANSFORMS"
+  },
+  {
+    "src": "mixamorig:Spine1",
+    "tgt": "spine.001",
+    "en": true,
+    "mode": "COPY_ROTATION"
+  },
+  {
+    "src": "mixamorig:Spine2",
+    "tgt": "spine.002",
+    "en": true,
+    "mode": "COPY_ROTATION"
+  },
+  {
+    "src": "mixamorig:Neck",
+    "tgt": "spine.004",
+    "en": true,
+    "mode": "COPY_ROTATION"
+  },
+  {
+    "src": "mixamorig:Head",
+    "tgt": "spine.006",
+    "en": true,
+    "mode": "COPY_ROTATION"
+  },
+  {
+    "src": "mixamorig:LeftUpLeg",
+    "tgt": "thigh.L",
+    "en": true,
+    "mode": "COPY_ROTATION"
+  },
+  {
+    "src": "mixamorig:LeftLeg",
+    "tgt": "shin.L",
+    "en": true,
+    "mode": "COPY_ROTATION"
+  },
+  {
+    "src": "mixamorig:LeftFoot",
+    "tgt": "foot.L",
+    "en": true,
+    "mode": "COPY_ROTATION"
+  },
+  {
+    "src": "mixamorig:LeftToeBase",
+    "tgt": "toe.L",
+    "en": true,
+    "mode": "COPY_ROTATION"
+  },
+  {
+    "src": "mixamorig:RightUpLeg",
+    "tgt": "thigh.R",
+    "en": true,
+    "mode": "COPY_ROTATION"
+  },
+  {
+    "src": "mixamorig:RightLeg",
+    "tgt": "shin.R",
+    "en": true,
+    "mode": "COPY_ROTATION"
+  },
+  {
+    "src": "mixamorig:RightFoot",
+    "tgt": "foot.R",
+    "en": true,
+    "mode": "COPY_ROTATION"
+  },
+  {
+    "src": "mixamorig:RightToeBase",
+    "tgt": "toe.R",
+    "en": true,
+    "mode": "COPY_ROTATION"
+  },
+  {
+    "src": "mixamorig:LeftShoulder",
+    "tgt": "shoulder.L",
+    "en": true,
+    "mode": "COPY_ROTATION"
+  },
+  {
+    "src": "mixamorig:LeftArm",
+    "tgt": "upper_arm.L",
+    "en": true,
+    "mode": "COPY_ROTATION"
+  },
+  {
+    "src": "mixamorig:LeftForeArm",
+    "tgt": "forearm.L",
+    "en": true,
+    "mode": "COPY_ROTATION"
+  },
+  {
+    "src": "mixamorig:LeftHand",
+    "tgt": "hand.L",
+    "en": true,
+    "mode": "LOCAL_ROTATION"
+  },
+  {
+    "src": "mixamorig:RightShoulder",
+    "tgt": "shoulder.R",
+    "en": true,
+    "mode": "COPY_ROTATION"
+  },
+  {
+    "src": "mixamorig:RightArm",
+    "tgt": "upper_arm.R",
+    "en": true,
+    "mode": "COPY_ROTATION"
+  },
+  {
+    "src": "mixamorig:RightForeArm",
+    "tgt": "forearm.R",
+    "en": true,
+    "mode": "COPY_ROTATION"
+  },
+  {
+    "src": "mixamorig:RightHand",
+    "tgt": "hand.R",
+    "en": true,
+    "mode": "LOCAL_ROTATION"
+  },
+  {
+    "src": "mixamorig:LeftHandThumb1",
+    "tgt": "thumb.01.L",
+    "en": true,
+    "mode": "LOCAL_ROTATION"
+  },
+  {
+    "src": "mixamorig:LeftHandThumb2",
+    "tgt": "thumb.02.L",
+    "en": true,
+    "mode": "LOCAL_ROTATION"
+  },
+  {
+    "src": "mixamorig:LeftHandThumb3",
+    "tgt": "thumb.03.L",
+    "en": true,
+    "mode": "LOCAL_ROTATION"
+  },
+  {
+    "src": "mixamorig:LeftHandIndex1",
+    "tgt": "palm.01.L",
+    "en": true,
+    "mode": "LOCAL_ROTATION"
+  },
+  {
+    "src": "mixamorig:LeftHandIndex2",
+    "tgt": "f_index.01.L",
+    "en": true,
+    "mode": "LOCAL_ROTATION"
+  },
+  {
+    "src": "mixamorig:LeftHandIndex3",
+    "tgt": "f_index.02.L",
+    "en": true,
+    "mode": "LOCAL_ROTATION"
+  },
+  {
+    "src": "mixamorig:LeftHandMiddle1",
+    "tgt": "palm.02.L",
+    "en": true,
+    "mode": "LOCAL_ROTATION"
+  },
+  {
+    "src": "mixamorig:LeftHandMiddle2",
+    "tgt": "f_middle.01.L",
+    "en": true,
+    "mode": "LOCAL_ROTATION"
+  },
+  {
+    "src": "mixamorig:LeftHandMiddle3",
+    "tgt": "f_middle.02.L",
+    "en": true,
+    "mode": "LOCAL_ROTATION"
+  },
+  {
+    "src": "mixamorig:LeftHandRing1",
+    "tgt": "palm.03.L",
+    "en": true,
+    "mode": "LOCAL_ROTATION"
+  },
+  {
+    "src": "mixamorig:LeftHandRing2",
+    "tgt": "f_ring.01.L",
+    "en": true,
+    "mode": "LOCAL_ROTATION"
+  },
+  {
+    "src": "mixamorig:LeftHandRing3",
+    "tgt": "f_ring.02.L",
+    "en": true,
+    "mode": "LOCAL_ROTATION"
+  },
+  {
+    "src": "mixamorig:LeftHandPinky1",
+    "tgt": "palm.04.L",
+    "en": true,
+    "mode": "LOCAL_ROTATION"
+  },
+  {
+    "src": "mixamorig:LeftHandPinky2",
+    "tgt": "f_pinky.01.L",
+    "en": true,
+    "mode": "LOCAL_ROTATION"
+  },
+  {
+    "src": "mixamorig:LeftHandPinky3",
+    "tgt": "f_pinky.02.L",
+    "en": true,
+    "mode": "LOCAL_ROTATION"
+  },
+  {
+    "src": "mixamorig:RightHandThumb1",
+    "tgt": "thumb.01.R",
+    "en": true,
+    "mode": "LOCAL_ROTATION"
+  },
+  {
+    "src": "mixamorig:RightHandThumb2",
+    "tgt": "thumb.02.R",
+    "en": true,
+    "mode": "LOCAL_ROTATION"
+  },
+  {
+    "src": "mixamorig:RightHandThumb3",
+    "tgt": "thumb.03.R",
+    "en": true,
+    "mode": "LOCAL_ROTATION"
+  },
+  {
+    "src": "mixamorig:RightHandIndex1",
+    "tgt": "palm.01.R",
+    "en": true,
+    "mode": "LOCAL_ROTATION"
+  },
+  {
+    "src": "mixamorig:RightHandIndex2",
+    "tgt": "f_index.01.R",
+    "en": true,
+    "mode": "LOCAL_ROTATION"
+  },
+  {
+    "src": "mixamorig:RightHandIndex3",
+    "tgt": "f_index.02.R",
+    "en": true,
+    "mode": "LOCAL_ROTATION"
+  },
+  {
+    "src": "mixamorig:RightHandMiddle1",
+    "tgt": "palm.02.R",
+    "en": true,
+    "mode": "LOCAL_ROTATION"
+  },
+  {
+    "src": "mixamorig:RightHandMiddle2",
+    "tgt": "f_middle.01.R",
+    "en": true,
+    "mode": "LOCAL_ROTATION"
+  },
+  {
+    "src": "mixamorig:RightHandMiddle3",
+    "tgt": "f_middle.02.R",
+    "en": true,
+    "mode": "LOCAL_ROTATION"
+  },
+  {
+    "src": "mixamorig:RightHandRing1",
+    "tgt": "palm.03.R",
+    "en": true,
+    "mode": "LOCAL_ROTATION"
+  },
+  {
+    "src": "mixamorig:RightHandRing2",
+    "tgt": "f_ring.01.R",
+    "en": true,
+    "mode": "LOCAL_ROTATION"
+  },
+  {
+    "src": "mixamorig:RightHandRing3",
+    "tgt": "f_ring.02.R",
+    "en": true,
+    "mode": "LOCAL_ROTATION"
+  },
+  {
+    "src": "mixamorig:RightHandPinky1",
+    "tgt": "palm.04.R",
+    "en": true,
+    "mode": "LOCAL_ROTATION"
+  },
+  {
+    "src": "mixamorig:RightHandPinky2",
+    "tgt": "f_pinky.01.R",
+    "en": true,
+    "mode": "LOCAL_ROTATION"
+  },
+  {
+    "src": "mixamorig:RightHandPinky3",
+    "tgt": "f_pinky.02.R",
+    "en": true,
+    "mode": "LOCAL_ROTATION"
+  }
+]
