@@ -386,6 +386,29 @@ class MIXAMO_OT_RemoveRetargeting(Operator):
         return {'FINISHED'}
 
 
+class MIXAMO_OT_SelectMappingBone(Operator):
+    """Select a bone in the active armature by name (pose mode)"""
+    bl_idname = "mixamo_retarget.select_mapping_bone"
+    bl_label = "Select Bone"
+
+    bone_name: StringProperty(default="")
+    from_source: BoolProperty(default=False)
+
+    def execute(self, context):
+        arm = context.active_object
+        if not arm or arm.type != 'ARMATURE':
+            return {'CANCELLED'}
+        if context.mode != 'POSE':
+            return {'CANCELLED'}
+        bone = arm.pose.bones.get(self.bone_name)
+        if not bone:
+            return {'CANCELLED'}
+        bpy.ops.pose.select_all(action='DESELECT')
+        bone.bone.select = True
+        arm.data.bones.active = bone.bone
+        return {'FINISHED'}
+
+
 class MIXAMO_OT_RemoveSingleRetargeting(Operator):
     """Remove retargeting constraints from the selected bone mapping's target bone"""
     bl_idname = "mixamo_retarget.remove_single_retargeting"
@@ -796,6 +819,7 @@ _classes = [
     MIXAMO_OT_ApplyRetargeting,
     MIXAMO_OT_RemoveRetargeting,
     MIXAMO_OT_RemoveSingleRetargeting,
+    MIXAMO_OT_SelectMappingBone,
     MIXAMO_OT_InterpolateBones,
     MIXAMO_OT_BakeRetargeting,
     MIXAMO_OT_SavePreset,

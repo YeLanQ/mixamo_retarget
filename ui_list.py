@@ -12,10 +12,20 @@ class MIXAMO_UL_BoneMappings(UIList):
             row.prop(item, "enabled", text="", emboss=False,
                      icon='CHECKBOX_HLT' if item.enabled else 'CHECKBOX_DEHLT')
 
+            if item.source_bone:
+                op = row.operator("mixamo_retarget.select_mapping_bone",
+                                  text="", icon='BONE_DATA', emboss=False)
+                op.bone_name = item.source_bone
+                op.from_source = True
             row.prop(item, "source_bone", text="", emboss=False)
 
             row.label(text="", icon='TRIA_RIGHT')
 
+            if item.target_bone:
+                op = row.operator("mixamo_retarget.select_mapping_bone",
+                                  text="", icon='BONE_DATA', emboss=False)
+                op.bone_name = item.target_bone
+                op.from_source = False
             row.prop(item, "target_bone", text="", emboss=False)
 
             row.prop(item, "retarget_mode", text="")
