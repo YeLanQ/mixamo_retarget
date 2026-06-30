@@ -443,9 +443,24 @@ class MIXAMO_OT_FillMappingBone(Operator):
             return {'CANCELLED'}
 
         bone_name = selected[0].name
-        if arm == s.source_armature:
+
+        def _arm_match(a, b):
+            if a is None or b is None:
+                return False
+            if a == b:
+                return True
+            try:
+                return a.name == b.name
+            except ReferenceError:
+                return False
+
+        if _arm_match(arm, s.source_armature):
             item.source_bone = bone_name
-        elif arm == s.target_armature:
+        elif _arm_match(arm, s.target_armature):
+            item.target_bone = bone_name
+        elif s.source_armature and bone_name in s.source_armature.pose.bones:
+            item.source_bone = bone_name
+        elif s.target_armature and bone_name in s.target_armature.pose.bones:
             item.target_bone = bone_name
         else:
             self.report({'WARNING'}, "Active armature is neither source nor target")
